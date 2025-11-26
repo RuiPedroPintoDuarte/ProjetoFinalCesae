@@ -1,7 +1,0 @@
-Flask==2.3.3
-Flask-SQLAlchemy==3.0.5
-Flask-Bcrypt==1.0.1
-pandas==2.0.3
-sqlalchemy==2.0.21
-pyodbc==4.0.39
-Werkzeug==2.3.7
