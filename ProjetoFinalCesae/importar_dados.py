@@ -2,10 +2,10 @@ import pandas as pd
 import sqlalchemy
 import random
 import string
-
+import os
 from funcoes_database import addCliente
 
-pathFile = "C://Users//User//Downloads//bank+marketing//bank//bank-full.csv"
+pathFile = os.getcwd() + "//bank-full.csv"
 
 server = 'localhost'
 database = 'BankDatabase'
