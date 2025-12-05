@@ -46,7 +46,7 @@ def papel_obrigatorio(papel_requerido):
             if 'utilizador_id' not in session:
                 flash('Por favor, faça login primeiro.', 'aviso')
                 return redirect(url_for('login'))
-            
+
             utilizador = Utilizador.query.get(session['utilizador_id'])
             if utilizador.TipoUtilizador != papel_requerido:
                 flash('Acesso negado. Permissão insuficiente.', 'perigo')
