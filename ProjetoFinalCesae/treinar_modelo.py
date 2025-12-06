@@ -157,7 +157,7 @@ def train_credit_scoring_model():
     feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False)
     
     print("As 10 features mais importantes para o modelo:")
-    print(feature_importance_df.head(10))
+    print(feature_importance_df.head(10).to_string(index=False))
 
     # 8. Guardar o Modelo Final
     # Guardamos o nosso modelo treinado e otimizado num ficheiro. Assim, podemos carregá-lo noutra aplicação
