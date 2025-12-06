@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import joblib
 # Importar o SMOTE e o Pipeline do imblearn
+import shap
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline
 
@@ -159,7 +160,46 @@ def train_credit_scoring_model():
     print("As 10 features mais importantes para o modelo:")
     print(feature_importance_df.head(10).to_string(index=False))
 
-    # 8. Guardar o Modelo Final
+    # 10. Análise do Efeito Específico das Features (SHAP)
+    # Para responder à pergunta "qual o efeito específico de cada feature?", usamos a técnica SHAP.
+    # Ela mostra, para uma previsão individual, como cada feature contribuiu para aumentar ou diminuir o risco.
+    print("\n--- Análise de Efeito Específico (SHAP) para um Cliente Exemplo ---")
+
+    # O SHAP precisa do modelo e dos dados de treino transformados para criar um "explicador".
+    # Primeiro, transformamos os dados de treino com o nosso pré-processador.
+    X_train_transformed = model.named_steps['preprocessor'].transform(X_train).toarray()
+    X_train_transformed_df = pd.DataFrame(X_train_transformed, columns=all_feature_names)
+
+    # Criamos o explicador SHAP. Usamos o TreeExplainer porque o nosso modelo é baseado em árvores.
+    explainer = shap.TreeExplainer(model.named_steps['classifier'], X_train_transformed_df)
+
+    # Agora, calculamos os valores SHAP para os nossos dados de teste.
+    # Transformamos os dados de teste primeiro.
+    X_test_transformed = model.named_steps['preprocessor'].transform(X_test).toarray()
+    X_test_transformed_df = pd.DataFrame(X_test_transformed, columns=all_feature_names)
+    shap_values = explainer(X_test_transformed_df)
+
+    # Vamos analisar o primeiro cliente do conjunto de teste como exemplo.
+    # Em vez de imprimir o objeto complexo, vamos criar um gráfico interativo.
+    print("\nAnálise para o primeiro cliente do conjunto de teste gerada.")
+    
+    # O SHAP gera valores para cada classe. Estamos interessados na classe '1' (incumprimento).
+    # O base_value é a previsão média do modelo sobre todos os dados.
+    base_value_class1 = explainer.expected_value[1]
+    # Os shap_values_class1 são os "empurrões" de cada feature para a classe '1'.
+    shap_values_class1 = shap_values.values[:, :, 1]
+    
+    # Criar o gráfico de força para o primeiro cliente do conjunto de teste.
+    force_plot = shap.force_plot(base_value_class1, 
+                                 shap_values_class1[0,:], 
+                                 X_test_transformed_df.iloc[0,:], # Usamos os dados TRANSFORMADOS para corresponder aos shap_values
+                                 matplotlib=False) # Usar a versão JS
+
+    # Guardar o gráfico como um ficheiro HTML.
+    shap.save_html("analise_cliente_shap.html", force_plot)
+    print("Gráfico de análise SHAP guardado como 'analise_cliente_shap.html'. Abra este ficheiro num browser.")
+
+    # 11. Guardar o Modelo Final
     # Guardamos o nosso modelo treinado e otimizado num ficheiro. Assim, podemos carregá-lo noutra aplicação
     # (como a nossa aplicação Flask) para fazer previsões em novos clientes sem ter de treinar tudo de novo.
     model_filename = 'credit_scoring_model.joblib'
