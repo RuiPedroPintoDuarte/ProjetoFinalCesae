@@ -49,11 +49,6 @@ def addCliente(dados_utilizador, dados_cliente):
     addUtilizador(id,dados_utilizador + [1])
     print(dados_cliente)
     df_cliente = pd.DataFrame([[id] + dados_cliente], columns = columnsCliente)
-    for i in ["DefaultCredit", "EmprestimoCasa","EmprestimoPessoal", "Subscreveu"]:
-        if df_cliente.iloc[0][i] == "yes":
-            df_cliente.at[0, i] = 1
-        elif df_cliente.iloc[0][i] == "no":
-            df_cliente.at[0, i] = 0
     df_cliente.to_sql(
         "Cliente",
         engine,
@@ -62,21 +57,16 @@ def addCliente(dados_utilizador, dados_cliente):
     )
 
 def addAdmin(dados_utilizador):
-    addUtilizador(getNextId(), dados_utilizador)
+    addUtilizador(getNextId(), dados_utilizador + [3])
 
-def addGestor(dados_utilizador, lista_clientes):
+def addGestor(dados_utilizador, lista_clientesId):
     id = getNextId()
-    addUtilizador(id, dados_utilizador + [1])
-    df_gestor = getGestorAssociadosTable()
-    new_col = []
-    for id in df_gestor["UtilizadorId"]:
-        if id in lista_clientes:
-            new_col.append(1)
-        else:
-            new_col.append(0)
-    df_gestor.insert(1, id, new_col)
+    addUtilizador(id, dados_utilizador + [2])
+    df_gestor = []
+    for clienteId in lista_clientesId:
+        df_gestor.append([id, clienteId])
     df_gestor.to_sql(
-        "GestoresAssociados",
+        "Fact_Gestor_Cliente",
         engine,
         if_exists="replace",
         index=False
