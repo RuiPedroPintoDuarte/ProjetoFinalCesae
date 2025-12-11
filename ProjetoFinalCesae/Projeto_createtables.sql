@@ -52,17 +52,32 @@ CREATE TABLE FactGestorCliente(
 )
 
 CREATE TABLE FactTransacao(
-	ClienteId INT,
-	Descricao VARCHAR(120),
-	Quantidade INT,
-	DataTransacao DATE,
-	Categoria VARCHAR(120),
-	CONSTRAINT FK_ClienteTransacao FOREIGN KEY
-	(ClienteId) REFERENCES dbo.DimCliente(ClienteId)
+    TransacaoId INT IDENTITY(1,1) PRIMARY KEY, 
+    ClienteId INT,
+    Descricao VARCHAR(120),
+    Quantidade INT,
+    DataTransacao DATE,
+    Categoria VARCHAR(120),
+    CONSTRAINT FK_ClienteTransacao FOREIGN KEY
+    (ClienteId) REFERENCES dbo.DimCliente(ClienteId)
 )
+
+INSERT INTO DimAdmin (AdminId, Username, Email, PalavraPasse)
+VALUES (1, 'admin_geral', 'admin@bankdatabase.com', 'adminPass123');
+
+INSERT INTO DimGestor (GestorId, Username, Email, PalavraPasse)
+VALUES (101, 'joao_gestor', 'joao.gestor@bankdatabase.com', 'gestorPass123');
+
+INSERT INTO FactGestorCliente (GestorId, ClienteId)
+VALUES
+(101, 1), 
+(101, 2), 
+(101, 3); 
+
 
 SELECT * FROM dbo.DimCliente
 SELECT * FROM dbo.DimGestor
 SELECT * FROM dbo.DimAdmin
 SELECT * FROM dbo.FactInfoBancaria
 SELECT * FROM dbo.FactGestorCliente
+SELECT * FROM dbo.FactTransacao

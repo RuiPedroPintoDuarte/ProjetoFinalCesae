@@ -61,6 +61,7 @@ class FactTransacao(db.Model):
     TransacaoId = db.Column(db.Integer, primary_key=True)
     ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
     Descricao = db.Column(db.String(255), nullable=True)
+    Categoria = db.Column(db.String(50), nullable=True)
     Quantidade = db.Column(db.Float, nullable=False)
     DataTransacao = db.Column(db.Date, nullable=False)
 
@@ -104,6 +105,10 @@ def papel_obrigatorio(papeis_requeridos):
             return f(*args, **kwargs)
         return funcao_decorada
     return decorador
+
+# Função auxiliar para formatar números (PT)
+def formatar_numero_pt(valor):
+    return f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 # Rota de Registo
 @app.route('/registo', methods=['GET', 'POST'])
@@ -283,8 +288,20 @@ def meus_movimentos():
         ORDER BY DataTransacao DESC
     """)
     transacoes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+    
+    # Formatar valores para apresentação
+    transacoes_formatadas = []
+    for t in transacoes:
+        transacoes_formatadas.append({
+            'Descricao': t.Descricao,
+            'Quantidade': formatar_numero_pt(t.Quantidade),
+            'DataTransacao': t.DataTransacao
+        })
+    
+    saldo_formatado = formatar_numero_pt(saldo)
 
     return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
+    return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo_formatado, transacoes=transacoes_formatadas)
 
 @app.route('/minha-atividade')
 @autenticacao_obrigatoria
@@ -300,19 +317,31 @@ def minha_atividade():
         SELECT
             YEAR(DataTransacao) as ano,
             MONTH(DataTransacao) as mes,
-            SUM(Quantidade) as total
-        FROM FactTransacao
-        WHERE ClienteId = :user_id AND Quantidade < 0
+            SUM(QtdAjustada) as total
+        FROM (
+            SELECT 
+                DataTransacao,
+                CASE 
+                    WHEN Quantidade < 0 THEN Quantidade
+                    WHEN Descricao LIKE N'Empréstimo%' OR Descricao LIKE 'Emprestimo%' THEN -Quantidade
+                    ELSE 0 
+                END as QtdAjustada
+            FROM FactTransacao
+            WHERE ClienteId = :user_id
+        ) AS Valores
+        WHERE QtdAjustada < 0
         GROUP BY YEAR(DataTransacao), MONTH(DataTransacao)
         ORDER BY ano, mes
     """)
     gastos_por_mes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+
 
     # Passar estes dados para o Chart.js no frontend
     labels = [f"{d.ano}-{d.mes:02d}" for d in gastos_por_mes]
     values = [abs(d.total) for d in gastos_por_mes] # Valor absoluto para o gráfico
 
     return render_template('cliente_atividade.html', labels=labels, values=values)
+
 
 @app.route('/meu-perfil')
 @autenticacao_obrigatoria
@@ -484,6 +513,9 @@ def pedir_emprestimo():
         user_id = session['utilizador_id']
 
         try:
+            # Tratar formato de número (ex: 350.000 -> 350000)
+            if valor:
+                valor = valor.replace('.', '').replace(',', '.')
             valor_float = float(valor)
             if valor_float <= 0:
                 raise ValueError()
@@ -528,8 +560,21 @@ def pedir_emprestimo():
                 elif tipo_emprestimo == 'casa':
                     info_bancaria.EmprestimoCasa = True
             
+            # 3. Registar a transação na FactTransacao para aparecer nos movimentos
+            nova_transacao = FactTransacao(
+                ClienteId=user_id,
+                Descricao=f"Empréstimo {tipo_emprestimo.capitalize()} Aprovado",
+                Categoria=f"Empréstimo {tipo_emprestimo.capitalize()}",
+                Quantidade=valor_float,
+                DataTransacao=datetime.now().date()
+            )
+            db.session.add(nova_transacao)
+            
             db.session.commit()
-            flash(f'Parabéns! O seu empréstimo de €{valor_float:.2f} foi aprovado e o valor adicionado ao seu saldo.', 'sucesso')
+            # Formatar valor para PT (ex: 350.000,00)
+            valor_formatado = f"{valor_float:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            valor_formatado = formatar_numero_pt(valor_float)
+            flash(f'Parabéns! O seu empréstimo de €{valor_formatado} foi aprovado e o valor adicionado ao seu saldo.', 'sucesso')
 
         return redirect(url_for('resultado_emprestimo', status=status, probabilidade=probabilidade))
 
@@ -556,4 +601,5 @@ def resultado_emprestimo():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+
     app.run(debug=True)
