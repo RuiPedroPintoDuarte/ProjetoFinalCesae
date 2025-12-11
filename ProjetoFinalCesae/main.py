@@ -19,21 +19,63 @@ engine = sqlalchemy.create_engine(
     "mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
 )
 
-# Modelo de Utilizador
-class Utilizador(db.Model):
-    __tablename__ = 'Utilizador'
-    UtilizadorId = db.Column(db.Integer, primary_key=True)
+# Modelos de Dimensão
+class DimCliente(db.Model):
+    __tablename__ = 'DimCliente'
+    ClienteId = db.Column(db.Integer, primary_key=True)
+    Nome = db.Column(db.String(120), nullable=True)
+    DataNascimento = db.Column(db.Date, nullable=True)
+    NIF = db.Column(db.String(20), unique=True, nullable=True)
     Username = db.Column(db.String(120), nullable=False, unique=True)
     Email = db.Column(db.String(120), nullable=False, unique=True)
     PalavraPasse = db.Column(db.String(120), nullable=False)
-    TipoUtilizador = db.Column(db.Integer, nullable=False)  # 1-cliente, 2-gestor, 3-admin
+
+class DimGestor(db.Model):
+    __tablename__ = 'DimGestor'
+    GestorId = db.Column(db.Integer, primary_key=True)
+    Username = db.Column(db.String(120), nullable=False, unique=True)
+    Email = db.Column(db.String(120), nullable=False, unique=True)
+    PalavraPasse = db.Column(db.String(120), nullable=False)
+
+class DimAdmin(db.Model):
+    __tablename__ = 'DimAdmin'
+    AdminId = db.Column(db.Integer, primary_key=True)
+    Username = db.Column(db.String(120), nullable=False, unique=True)
+    Email = db.Column(db.String(120), nullable=False, unique=True)
+    PalavraPasse = db.Column(db.String(120), nullable=False)
+
+# Novos Modelos de Fato
+class FactGestorCliente(db.Model):
+    __tablename__ = 'FactGestorCliente'
+    GestorId = db.Column(db.Integer, db.ForeignKey('DimGestor.GestorId'), primary_key=True)
+    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), primary_key=True)
+
+class FactTransacao(db.Model):
+    __tablename__ = 'FactTransacao'
+    TransacaoId = db.Column(db.Integer, primary_key=True)
+    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
+    Descricao = db.Column(db.String(255), nullable=True)
+    Quantidade = db.Column(db.Float, nullable=False)
+    DataTransacao = db.Column(db.Date, nullable=False)
+
+class FactInfoBancaria(db.Model):
+    __tablename__ = 'FactInfoBancaria'
+    InfoId = db.Column(db.Integer, primary_key=True)
+    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
+    Emprego = db.Column(db.String(50), nullable=True)
+    EstadoCivil = db.Column(db.String(50), nullable=True)
+    DefaultCredit = db.Column(db.Boolean, nullable=True)
+    Saldo = db.Column(db.Float, nullable=False)
+    EmprestimoCasa = db.Column(db.Boolean, nullable=True)
+    EmprestimoPessoal = db.Column(db.Boolean, nullable=True)
+    DataRegisto = db.Column(db.Date, nullable=False)
 
 # Decorador para verificar autenticação
 def autenticacao_obrigatoria(f):
     @wraps(f)
     def funcao_decorada(*args, **kwargs):
         if 'utilizador_id' not in session:
-            flash('Por favor, faça login primeiro.', 'aviso')
+            flash('Por favor, faça login primeiro.', 'warning')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return funcao_decorada
@@ -44,11 +86,11 @@ def papel_obrigatorio(papel_requerido):
         @wraps(f)
         def funcao_decorada(*args, **kwargs):
             if 'utilizador_id' not in session:
-                flash('Por favor, faça login primeiro.', 'aviso')
+                flash('Por favor, faça login primeiro.', 'warning')
                 return redirect(url_for('login'))
 
-            utilizador = Utilizador.query.get(session['utilizador_id'])
-            if utilizador.TipoUtilizador != papel_requerido:
+            # Check user type from session
+            if session.get('user_type') != papel_requerido:
                 flash('Acesso negado. Permissão insuficiente.', 'perigo')
                 return redirect(url_for('painel'))
             return f(*args, **kwargs)
@@ -61,15 +103,20 @@ def registo():
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
+        nome = request.form.get('nome')
+        data_nascimento_str = request.form.get('data_nascimento')
+        nif = request.form.get('nif')
         palavra_passe = request.form.get('palavra_passe')
         
-        if Utilizador.query.filter_by(Username=username).first():
+        if DimCliente.query.filter_by(Username=username).first() or DimCliente.query.filter_by(Email=email).first():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('registo'))
         
-        novo_utilizador = Utilizador(Username=username, Email=email, PalavraPasse=palavra_passe, TipoUtilizador=1)
+        data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
         
-        db.session.add(novo_utilizador)
+        novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        
+        db.session.add(novo_cliente)
         db.session.commit()
         
         flash('Conta criada com sucesso! Por favor, faça login.', 'sucesso')
@@ -86,19 +133,30 @@ def login():
         
         print(f"Tentando login com email: {email}, password: {palavra_passe}")
         
-        utilizador = Utilizador.query.filter_by(Email=email).first()
-        print(f"Utilizador encontrado: {utilizador}")
+        cliente = DimCliente.query.filter_by(Email=email).first()
+        gestor = DimGestor.query.filter_by(Email=email).first()
+        admin = DimAdmin.query.filter_by(Email=email).first()
         
-        if utilizador:
-            print(f"Password BD: {utilizador.PalavraPasse}")
-            print(f"Password recebida: {palavra_passe}")
-            print(f"Passwords iguais: {utilizador.PalavraPasse == palavra_passe}")
+        logged_in_user = None
+        user_type = None
+
+        if cliente and cliente.PalavraPasse == palavra_passe:
+            logged_in_user = cliente
+            user_type = 'cliente'
+            session['utilizador_id'] = cliente.ClienteId
+        elif gestor and gestor.PalavraPasse == palavra_passe:
+            logged_in_user = gestor
+            user_type = 'gestor'
+            session['utilizador_id'] = gestor.GestorId
+        elif admin and admin.PalavraPasse == palavra_passe:
+            logged_in_user = admin
+            user_type = 'admin'
+            session['utilizador_id'] = admin.AdminId
         
-        if utilizador and utilizador.PalavraPasse == palavra_passe:
-            session['utilizador_id'] = utilizador.UtilizadorId
-            session['username'] = utilizador.Username
-            session['papel'] = utilizador.TipoUtilizador
-            flash(f'Bem-vindo, {utilizador.Username}!', 'sucesso')
+        if logged_in_user:
+            session['username'] = logged_in_user.Username
+            session['user_type'] = user_type # Store user type as string
+            flash(f'Bem-vindo, {logged_in_user.Username}!', 'sucesso')
             return redirect(url_for('painel'))
         else:
             flash('Email ou palavra-passe incorretos!', 'perigo')
@@ -109,9 +167,17 @@ def login():
 @app.route('/painel')
 @autenticacao_obrigatoria
 def painel():
-    utilizador = Utilizador.query.get(session['utilizador_id'])
-    nomes_papel = {1: 'Cliente', 2: 'Gestor', 3: 'Administrador'}
-    return render_template('painel.html', utilizador=utilizador, papel=nomes_papel[utilizador.TipoUtilizador])
+    user_id = session['utilizador_id']
+    user_type = session['user_type']
+    
+    if user_type == 'cliente':
+        utilizador = DimCliente.query.get(user_id)
+    elif user_type == 'gestor':
+        utilizador = DimGestor.query.get(user_id)
+    elif user_type == 'admin':
+        utilizador = DimAdmin.query.get(user_id)
+    
+    return render_template('painel.html', utilizador=utilizador, papel=user_type.capitalize())
 
 # Rota para Criar Gestor (apenas Admin)
 @app.route('/criar-gestor', methods=['GET', 'POST'])
@@ -121,12 +187,12 @@ def criar_gestor():
         username = request.form.get('username')
         email = request.form.get('email')
         palavra_passe = request.form.get('palavra_passe')
-        
-        if Utilizador.query.filter_by(Username=username).first():
+
+        if DimGestor.query.filter_by(Username=username).first() or DimGestor.query.filter_by(Email=email).first():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_gestor'))
         
-        novo_gestor = Utilizador(Username=username, Email=email, PalavraPasse=palavra_passe, TipoUtilizador=2)
+        novo_gestor = DimGestor(Username=username, Email=email, PalavraPasse=palavra_passe)
         
         db.session.add(novo_gestor)
         db.session.commit()
@@ -140,22 +206,26 @@ def criar_gestor():
 @app.route('/criar-cliente', methods=['GET', 'POST'])
 @autenticacao_obrigatoria
 def criar_cliente():
-    utilizador = Utilizador.query.get(session['utilizador_id'])
+    user_type = session['user_type']
     
-    if utilizador.TipoUtilizador not in [2, 3]:
+    if user_type not in ['gestor', 'admin']:
         flash('Acesso negado.', 'perigo')
         return redirect(url_for('painel'))
     
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
+        nome = request.form.get('nome')
+        data_nascimento_str = request.form.get('data_nascimento')
+        nif = request.form.get('nif')
         palavra_passe = request.form.get('palavra_passe')
         
-        if Utilizador.query.filter_by(Username=username).first():
+        if DimCliente.query.filter_by(Username=username).first() or DimCliente.query.filter_by(Email=email).first():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_cliente'))
         
-        novo_cliente = Utilizador(Username=username, Email=email, PalavraPasse=palavra_passe, TipoUtilizador=1)
+        data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
+        novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
