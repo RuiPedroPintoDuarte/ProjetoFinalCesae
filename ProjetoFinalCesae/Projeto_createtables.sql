@@ -51,6 +51,16 @@ CREATE TABLE FactGestorCliente(
 	(ClienteId) REFERENCES dbo.DimCliente(ClienteId)
 )
 
+CREATE TABLE FactTransacao(
+	ClienteId INT,
+	Descricao VARCHAR(120),
+	Quantidade INT,
+	DataTransacao DATE,
+	Categoria VARCHAR(120),
+	CONSTRAINT FK_ClienteTransacao FOREIGN KEY
+	(ClienteId) REFERENCES dbo.DimCliente(ClienteId)
+)
+
 SELECT * FROM dbo.DimCliente
 SELECT * FROM dbo.DimGestor
 SELECT * FROM dbo.DimAdmin
