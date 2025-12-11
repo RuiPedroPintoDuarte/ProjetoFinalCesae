@@ -1,6 +1,6 @@
 import pandas as pd
 
-import SQLConnection
+from Repository import SQLConnection
 
 tableName = "FactInfoBancaria"
 engine = SQLConnection.engine

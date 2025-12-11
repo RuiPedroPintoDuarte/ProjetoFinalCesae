@@ -1,6 +1,7 @@
 import pandas as pd
+import sqlalchemy
 
-import SQLConnection
+from Repository import SQLConnection
 
 tableName = "DimGestor"
 engine = SQLConnection.engine
@@ -33,5 +34,18 @@ def addGestor(Username, Email, PalavraPasse):
         index=False
     )
     return id
+
+def alterValue(GestorId, novoValor, campoDoNovoValor):
+    with engine.connect() as conn:
+        result = conn.execute(
+            sqlalchemy.text(f"""
+                UPDATE {tableName}
+                SET {campoDoNovoValor} = :nova
+                WHERE GestorId = :cid
+            """),
+            {"nova": novoValor, "cid": GestorId}
+        )
+        conn.commit()
+        return result.rowcount > 0
 
 addGestor("Gerunbindio", "gerunbindio@gmail.com", "gerundando")

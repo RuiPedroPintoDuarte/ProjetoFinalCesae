@@ -1,6 +1,7 @@
 import pandas as pd
+import sqlalchemy
 
-import SQLConnection
+from Repository import SQLConnection
 
 tableName = "DimAdmin"
 engine = SQLConnection.engine
@@ -33,5 +34,18 @@ def addAdmin(Username, Email, PalavraPasse):
         index=False
     )
     return id
+
+def alterValue(AdminId, novoValor, campoDoNovoValor):
+    with engine.connect() as conn:
+        result = conn.execute(
+            sqlalchemy.text(f"""
+                UPDATE {tableName}
+                SET {campoDoNovoValor} = :nova
+                WHERE AdminId = :cid
+            """),
+            {"nova": novoValor, "cid": AdminId}
+        )
+        conn.commit()
+        return result.rowcount > 0
 
 addAdmin("GerunbindioAdmin", "gerunbindio@gmail.com", "gerundando")

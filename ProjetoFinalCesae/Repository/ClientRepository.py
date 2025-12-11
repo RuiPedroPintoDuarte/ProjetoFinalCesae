@@ -1,6 +1,7 @@
 import pandas as pd
+import sqlalchemy
 
-import SQLConnection
+from Repository import SQLConnection
 
 tableName = "DimCliente"
 engine = SQLConnection.engine
@@ -34,4 +35,18 @@ def addCliente(Nome, DataNascimento, NIF, Username, Email, PalavraPasse):
     )
     return id
 
-addCliente("Ano", "2002-07-29", 234577888, "Boy", "gir@gmail", "ghas")
+def alterValue(clienteId, novoValor, campoDoNovoValor):
+    with engine.connect() as conn:
+        result = conn.execute(
+            sqlalchemy.text(f"""
+                UPDATE {tableName}
+                SET {campoDoNovoValor} = :nova
+                WHERE ClienteId = :cid
+            """),
+            {"nova": novoValor, "cid": clienteId}
+        )
+        conn.commit()
+        return result.rowcount > 0
+
+print(alterValue(1, "fogooooo", "PalavraPasse"))
+#addCliente("Ano", "2002-07-29", 234577888, "Boy", "gir@gmail", "ghas")

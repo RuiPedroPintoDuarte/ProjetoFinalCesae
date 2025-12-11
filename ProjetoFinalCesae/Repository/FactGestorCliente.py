@@ -1,6 +1,6 @@
 import pandas as pd
 
-import SQLConnection
+from Repository import SQLConnection
 
 tableName = "FactGestorCliente"
 engine = SQLConnection.engine
@@ -23,4 +23,4 @@ def addClienteInfo(GestorId, ListClienteIds):
     )
     return id
 
-addClienteInfo(1, [1,2])
+#addClienteInfo(1, [1,2])
