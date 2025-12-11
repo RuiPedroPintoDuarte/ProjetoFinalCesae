@@ -1,23 +1,16 @@
-import pandas as pd
-import sqlalchemy
-import pyodbc
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-import os
 from datetime import datetime
 from functools import wraps
+from sqlalchemy import func
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes'
+# Em produção, esta chave deve ser carregada de uma variável de ambiente e não estar hardcoded.
 app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
-
-# Engine SQLAlchemy para operações diretas
-engine = sqlalchemy.create_engine(
-    "mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
-)
 
 # Modelos de Dimensão
 class DimCliente(db.Model):
@@ -81,7 +74,9 @@ def autenticacao_obrigatoria(f):
     return funcao_decorada
 
 # Decorador para verificar papel
-def papel_obrigatorio(papel_requerido):
+def papel_obrigatorio(papeis_requeridos):
+    if not isinstance(papeis_requeridos, list):
+        papeis_requeridos = [papeis_requeridos]
     def decorador(f):
         @wraps(f)
         def funcao_decorada(*args, **kwargs):
@@ -90,7 +85,7 @@ def papel_obrigatorio(papel_requerido):
                 return redirect(url_for('login'))
 
             # Check user type from session
-            if session.get('user_type') != papel_requerido:
+            if session.get('user_type') not in papeis_requeridos:
                 flash('Acesso negado. Permissão insuficiente.', 'perigo')
                 return redirect(url_for('painel'))
             return f(*args, **kwargs)
@@ -112,8 +107,13 @@ def registo():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('registo'))
         
-        data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
-        
+        try:
+            data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
+        except ValueError:
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
+            return redirect(url_for('registo'))
+
+        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
@@ -131,8 +131,6 @@ def login():
         email = request.form.get('email')
         palavra_passe = request.form.get('palavra_passe')
         
-        print(f"Tentando login com email: {email}, password: {palavra_passe}")
-        
         cliente = DimCliente.query.filter_by(Email=email).first()
         gestor = DimGestor.query.filter_by(Email=email).first()
         admin = DimAdmin.query.filter_by(Email=email).first()
@@ -140,6 +138,7 @@ def login():
         logged_in_user = None
         user_type = None
 
+        # TODO: A verificação da palavra-passe é feita em texto simples. Implementar verificação com hash.
         if cliente and cliente.PalavraPasse == palavra_passe:
             logged_in_user = cliente
             user_type = 'cliente'
@@ -155,7 +154,7 @@ def login():
         
         if logged_in_user:
             session['username'] = logged_in_user.Username
-            session['user_type'] = user_type # Store user type as string
+            session['user_type'] = user_type
             flash(f'Bem-vindo, {logged_in_user.Username}!', 'sucesso')
             return redirect(url_for('painel'))
         else:
@@ -192,6 +191,7 @@ def criar_gestor():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_gestor'))
         
+        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_gestor = DimGestor(Username=username, Email=email, PalavraPasse=palavra_passe)
         
         db.session.add(novo_gestor)
@@ -204,14 +204,8 @@ def criar_gestor():
 
 # Rota para Criar Cliente (Admin e Gestor)
 @app.route('/criar-cliente', methods=['GET', 'POST'])
-@autenticacao_obrigatoria
+@papel_obrigatorio(['gestor', 'admin'])
 def criar_cliente():
-    user_type = session['user_type']
-    
-    if user_type not in ['gestor', 'admin']:
-        flash('Acesso negado.', 'perigo')
-        return redirect(url_for('painel'))
-    
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
@@ -224,7 +218,13 @@ def criar_cliente():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_cliente'))
         
-        data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
+        try:
+            data_nascimento = datetime.strptime(data_nascimento_str, '%Y-%m-%d').date() if data_nascimento_str else None
+        except ValueError:
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
+            return redirect(url_for('criar_cliente'))
+
+        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
@@ -248,6 +248,158 @@ def index():
     if 'utilizador_id' in session:
         return redirect(url_for('painel'))
     return redirect(url_for('login'))
+
+# --- ROTAS CLIENTE ---
+
+@app.route('/meus-movimentos')
+@autenticacao_obrigatoria
+@papel_obrigatorio('cliente')
+def meus_movimentos():
+    user_id = session['utilizador_id']
+    cliente = DimCliente.query.get(user_id)
+    
+    # Obter saldo e info bancária
+    info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
+    saldo = info_bancaria.Saldo if info_bancaria else 0.0
+
+    # Obter últimas transações (Home do Wireframe)
+    transacoes = FactTransacao.query.filter_by(ClienteId=user_id)\
+        .order_by(FactTransacao.DataTransacao.desc()).limit(10).all()
+
+    return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
+
+@app.route('/minha-atividade')
+@autenticacao_obrigatoria
+@papel_obrigatorio('cliente')
+def minha_atividade():
+    user_id = session['utilizador_id']
+    
+    # Agregação para o gráfico de barras (Total Gasto/Mês)
+    # Exemplo: Soma quantidades negativas (gastos) agrupadas por mês
+    # NOTA: Agrupar também por ano para não misturar dados de anos diferentes.
+    gastos_por_mes = db.session.query(
+        func.year(FactTransacao.DataTransacao).label('ano'),
+        func.month(FactTransacao.DataTransacao).label('mes'),
+        func.sum(FactTransacao.Quantidade).label('total')
+    ).filter(
+        FactTransacao.ClienteId == user_id,
+        FactTransacao.Quantidade < 0  # Apenas gastos
+    ).group_by(func.year(FactTransacao.DataTransacao), func.month(FactTransacao.DataTransacao)).order_by('ano', 'mes').all()
+
+    # Passar estes dados para o Chart.js no frontend
+    labels = [f"{d.ano}-{d.mes:02d}" for d in gastos_por_mes]
+    values = [abs(d.total) for d in gastos_por_mes] # Valor absoluto para o gráfico
+
+    return render_template('cliente_atividade.html', labels=labels, values=values)
+
+@app.route('/meu-perfil')
+@autenticacao_obrigatoria
+@papel_obrigatorio('cliente')
+def meu_perfil():
+    user_id = session['utilizador_id']
+    cliente = DimCliente.query.get(user_id)
+    info = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
+    
+    return render_template('cliente_perfil.html', cliente=cliente, info=info)
+
+# --- ROTAS GESTOR / ADMIN (GESTÃO DE CLIENTES) ---
+
+@app.route('/lista-clientes', methods=['GET'])
+@papel_obrigatorio(['gestor', 'admin'])
+def lista_clientes():
+    search_query = request.args.get('q')
+    
+    if search_query:
+        # Pesquisa por nome ou NIF
+        clientes = DimCliente.query.filter(
+            (DimCliente.Nome.contains(search_query)) | 
+            (DimCliente.NIF.contains(search_query))
+        ).all()
+    else:
+        clientes = DimCliente.query.all()
+
+    return render_template('lista_clientes.html', clientes=clientes)
+
+@app.route('/detalhe-cliente/<int:id>')
+@papel_obrigatorio(['gestor', 'admin'])
+def detalhe_cliente(id):
+    cliente = DimCliente.query.get_or_404(id)
+    info = FactInfoBancaria.query.filter_by(ClienteId=id).first()
+
+    # Lógica Simulada de Credit Score para o Gráfico
+    score = 0
+    if info:
+        if not info.DefaultCredit: score += 50
+        if info.Saldo > 1000: score += 20
+        if info.Emprego: score += 30
+    
+    # Dados para o gráfico circular (Pie Chart)
+    chart_data = {'Score': score, 'Risco': 100 - score}
+
+    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data)
+
+@app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
+@papel_obrigatorio(['gestor', 'admin'])
+def editar_cliente(id):
+    cliente = DimCliente.query.get_or_404(id)
+    info = FactInfoBancaria.query.filter_by(ClienteId=id).first()
+
+    if request.method == 'POST':
+        # Atualizar DimCliente
+        cliente.Email = request.form.get('email')
+        # ... outros campos ...
+
+        # Atualizar ou Criar FactInfoBancaria
+        if not info:
+            info = FactInfoBancaria(ClienteId=id, Saldo=0, DataRegisto=datetime.now())
+            db.session.add(info)
+        
+        info.EstadoCivil = request.form.get('estado_civil')
+        info.EmprestimoCasa = 'emprestimo_casa' in request.form
+        info.EmprestimoPessoal = 'emprestimo_pessoal' in request.form
+        
+        db.session.commit()
+        flash('Dados atualizados com sucesso.', 'sucesso')
+        return redirect(url_for('detalhe_cliente', id=id))
+
+    return render_template('editar_cliente.html', cliente=cliente, info=info)
+
+@app.route('/eliminar-cliente/<int:id>', methods=['POST'])
+@papel_obrigatorio(['gestor', 'admin'])
+def eliminar_cliente(id):
+    # Nota: Numa base de dados real, cuidado com Foreign Keys (Transações, etc.)
+    # Primeiro apagar dependências ou usar cascade delete no modelo
+    FactInfoBancaria.query.filter_by(ClienteId=id).delete()
+    FactTransacao.query.filter_by(ClienteId=id).delete()
+    DimCliente.query.filter_by(ClienteId=id).delete()
+    
+    db.session.commit()
+    flash('Cliente eliminado.', 'sucesso')
+    return redirect(url_for('lista_clientes'))
+
+
+# --- ROTAS ADMIN (GESTÃO DE GESTORES) ---
+
+@app.route('/lista-gestores', methods=['GET'])
+@papel_obrigatorio('admin')
+def lista_gestores():
+    search_query = request.args.get('q')
+    
+    if search_query:
+        gestores = DimGestor.query.filter(DimGestor.Username.contains(search_query)).all()
+    else:
+        gestores = DimGestor.query.all()
+
+    return render_template('lista_gestores.html', gestores=gestores)
+
+@app.route('/eliminar-gestor/<int:id>', methods=['POST'])
+@papel_obrigatorio('admin')
+def eliminar_gestor(id):
+    # Cuidado: Verificar se o gestor tem clientes associados antes de apagar
+    DimGestor.query.filter_by(GestorId=id).delete()
+    db.session.commit()
+    flash('Gestor eliminado.', 'sucesso')
+    return redirect(url_for('lista_gestores'))
 
 if __name__ == "__main__":
     with app.app_context():
