@@ -12,7 +12,10 @@ np.random.seed(42)
 
 # ==============================================================================
 # 1. Caminho e leitura dos dados
-file_path = r'c:\Users\Pedro\Documents\GitHub\ProjetoFinalCesae\ProjetoFinalCesae\bank-full.csv'
+# Constrói o caminho para o ficheiro 'bank-full.csv' na mesma pasta que o script.
+# Isto torna o script portátil e evita erros de 'Ficheiro não encontrado'.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(script_dir, 'bank-full.csv')
 
 # Verifica se o ficheiro existe antes de tentar lê-lo para evitar erros.
 if not os.path.exists(file_path):

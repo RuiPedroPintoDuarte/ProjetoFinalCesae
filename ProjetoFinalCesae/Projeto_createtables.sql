@@ -1,18 +1,35 @@
 CREATE DATABASE BankDatabase;
 USE BankDatabase
 
-CREATE TABLE Utilizador(
-	UtilizadorId INT,
-	Username NVARCHAR(120) NOT NULL,
-	Email NVARCHAR(120) NOT NULL,
-	PalavraPasse NVARCHAR(120) NOT NULL,
-	TipoUtilizador INT NOT NULL
-	CONSTRAINT PK_Utilizador PRIMARY KEY (UtilizadorId),
+CREATE TABLE DimCliente(
+	ClienteId INT,
+	Nome NVARCHAR(120),
+	DataNascimento DATE,
+	NIF INT,
+	Username NVARCHAR(120),
+	Email NVARCHAR(120),
+	PalavraPasse NVARCHAR(120),
+	CONSTRAINT PK_DimCliente PRIMARY KEY (ClienteId),
 )
 
-CREATE TABLE Cliente(
-	UtilizadorId INT,
-	Idade INT,
+CREATE TABLE DimGestor(
+	GestorId INT,
+	Username NVARCHAR(120),
+	Email NVARCHAR(120),
+	PalavraPasse NVARCHAR(120),
+	CONSTRAINT PK_DimGestor PRIMARY KEY (GestorId),
+)
+
+CREATE TABLE DimAdmin(
+	AdminId INT,
+	Username NVARCHAR(120),
+	Email NVARCHAR(120),
+	PalavraPasse NVARCHAR(120),
+	CONSTRAINT PK_DimAdmin PRIMARY KEY (AdminId),
+)
+
+CREATE TABLE FactInfoBancaria(
+	ClienteId INT,
 	Emprego NVARCHAR(120),
 	EstadoCivil NVARCHAR(120),
 	Educacao NVARCHAR(120),
@@ -20,25 +37,22 @@ CREATE TABLE Cliente(
 	Saldo INT,
 	EmprestimoCasa BIT,
 	EmprestimoPessoal BIT,
-	Contacto NVARCHAR(120),
-	DiaSemana NVARCHAR(120),
-	Mes NVARCHAR(120),
-	Duracao INT,
-	NContactos INT,
-	pDias INT,
-	ContactosPrevios INT,
-	pOutcome NVARCHAR(120),
-	Subscreveu BIT
-	CONSTRAINT FK_Utilizador FOREIGN KEY
-	(UtilizadorId) REFERENCES dbo.Utilizador(UtilizadorId)
+	DataRegisto DATE,
+	CONSTRAINT FK_ClienteInfo FOREIGN KEY
+	(ClienteId) REFERENCES dbo.DimCliente(ClienteId)
 )
 
-CREATE TABLE GestoresAssociados(
-	UtilizadorId INT NOT NULL
-	CONSTRAINT FK_UtilizadorGestor FOREIGN KEY
-	(UtilizadorId) REFERENCES dbo.Utilizador(UtilizadorId)
+CREATE TABLE FactGestorCliente(
+	GestorId INT,
+	ClienteId INT,
+	CONSTRAINT FK_Gestor FOREIGN KEY
+	(GestorId) REFERENCES dbo.DimGestor(GestorId),
+	CONSTRAINT FK_Cliente FOREIGN KEY
+	(ClienteId) REFERENCES dbo.DimCliente(ClienteId)
 )
 
-SELECT * FROM dbo.Utilizador
-SELECT * FROM dbo.Cliente
-SELECT * FROM dbo.GestoresAssociados
+SELECT * FROM dbo.DimCliente
+SELECT * FROM dbo.DimGestor
+SELECT * FROM dbo.DimAdmin
+SELECT * FROM dbo.FactInfoBancaria
+SELECT * FROM dbo.FactGestorCliente
