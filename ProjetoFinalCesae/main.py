@@ -181,7 +181,7 @@ def painel():
 
 # Rota para Criar Gestor (apenas Admin)
 @app.route('/criar-gestor', methods=['GET', 'POST'])
-@papel_obrigatorio(3)
+@papel_obrigatorio('admin')
 def criar_gestor():
     if request.method == 'POST':
         username = request.form.get('username')
