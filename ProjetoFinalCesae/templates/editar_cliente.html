@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Cliente{% endblock %}
+
+{% block content %}
+<h2>Editar Cliente: {{ cliente.Nome }}</h2>
+
+<form method="POST" action="{{ url_for('editar_cliente', id=cliente.ClienteId) }}">
+    <div class="card">
+        <div class="card-header">Dados do Cliente</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" value="{{ cliente.Email }}">
+                </div>
+                 <div class="col-md-6 mb-3">
+                    <label for="estado_civil" class="form-label">Estado Civil</label>
+                    <select class="form-select" id="estado_civil" name="estado_civil">
+                        <option value="single" {% if info and info.EstadoCivil == 'single' %}selected{% endif %}>Solteiro(a)</option>
+                        <option value="married" {% if info and info.EstadoCivil == 'married' %}selected{% endif %}>Casado(a)</option>
+                        <option value="divorced" {% if info and info.EstadoCivil == 'divorced' %}selected{% endif %}>Divorciado(a)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="emprestimo_casa" name="emprestimo_casa" {% if info and info.EmprestimoCasa %}checked{% endif %}>
+                        <label class="form-check-label" for="emprestimo_casa">
+                            Tem Empréstimo da Casa?
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="emprestimo_pessoal" name="emprestimo_pessoal" {% if info and info.EmprestimoPessoal %}checked{% endif %}>
+                        <label class="form-check-label" for="emprestimo_pessoal">
+                            Tem Empréstimo Pessoal?
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar Alterações</button>
+            <a href="{{ url_for('detalhe_cliente', id=cliente.ClienteId) }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </div>
+</form>
+{% endblock %}

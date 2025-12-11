@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultado do Pedido de Empréstimo{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card text-center">
+            <div class="card-header">
+                <h3>Resultado do seu Pedido de Empréstimo</h3>
+            </div>
+            <div class="card-body">
+                {% if status == 'aprovado' %}
+                    <h4 class="text-success">Pedido Aprovado!</h4>
+                    <p>Parabéns, o seu empréstimo foi aprovado e o montante já se encontra na sua conta.</p>
+                    <img src="{{ gif_url }}" alt="Aprovado" class="img-fluid my-3" style="max-height: 250px;">
+                {% elif status == 'rejeitado' %}
+                    <h4 class="text-danger">Pedido Rejeitado</h4>
+                    <p>Lamentamos, mas o seu pedido foi rejeitado devido a um elevado risco de incumprimento.</p>
+                    <img src="{{ gif_url }}" alt="Rejeitado" class="img-fluid my-3" style="max-height: 250px;">
+                {% endif %}
+
+                {% if probabilidade is not none %}
+                    {% set risco = probabilidade * 100 %}
+                    <p class="card-text mt-4">A probabilidade estimada de entrar em incumprimento (default) para este pedido foi de:</p>
+                    <h1 class="display-4 {% if risco > 50 %}text-danger{% else %}text-success{% endif %}">
+                        {{ "%.2f"|format(risco) }}%
+                    </h1>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('pedir_emprestimo') }}" class="btn btn-secondary">Fazer Novo Pedido</a>
+                <a href="{{ url_for('painel') }}" class="btn btn-primary">Voltar ao Painel</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

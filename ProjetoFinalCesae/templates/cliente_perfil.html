@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<h2>Meu Perfil</h2>
+<p>Consulte os seus dados pessoais e informação bancária.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Dados Pessoais</div>
+            <div class="card-body">
+                <p><strong>Nome:</strong> {{ cliente.Nome or 'Não definido' }}</p>
+                <p><strong>Username:</strong> {{ cliente.Username }}</p>
+                <p><strong>Email:</strong> {{ cliente.Email }}</p>
+                <p><strong>Data de Nascimento:</strong> {{ cliente.DataNascimento.strftime('%d-%m-%Y') if cliente.DataNascimento else 'Não definida' }}</p>
+                <p><strong>NIF:</strong> {{ cliente.NIF or 'Não definido' }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Informação Bancária</div>
+            {% if info %}
+            <div class="card-body">
+                <p><strong>Emprego:</strong> {{ info.Emprego or 'Não definido' }}</p>
+                <p><strong>Estado Civil:</strong> {{ info.EstadoCivil or 'Não definido' }}</p>
+                <p><strong>Crédito em Default:</strong> {{ 'Sim' if info.DefaultCredit else 'Não' }}</p>
+                <p><strong>Empréstimo da Casa:</strong> {{ 'Sim' if info.EmprestimoCasa else 'Não' }}</p>
+                <p><strong>Empréstimo Pessoal:</strong> {{ 'Sim' if info.EmprestimoPessoal else 'Não' }}</p>
+                <p><strong>Cliente desde:</strong> {{ info.DataRegisto.strftime('%d-%m-%Y') if info.DataRegisto else 'Não definida' }}</p>
+            </div>
+            {% else %}
+            <div class="card-body">
+                <p class="text-muted">Ainda não existe informação bancária associada.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

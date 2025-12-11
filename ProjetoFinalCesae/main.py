@@ -3,7 +3,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from datetime import datetime
 from functools import wraps
-from sqlalchemy import func
+from sqlalchemy import func, text
+import joblib
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes'
@@ -43,6 +47,15 @@ class FactGestorCliente(db.Model):
     GestorId = db.Column(db.Integer, db.ForeignKey('DimGestor.GestorId'), primary_key=True)
     ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), primary_key=True)
 
+class FactEmprestimo(db.Model):
+    __tablename__ = 'FactEmprestimo'
+    EmprestimoId = db.Column(db.Integer, primary_key=True)
+    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
+    Valor = db.Column(db.Float, nullable=False)
+    TipoEmprestimo = db.Column(db.String(50), nullable=False)
+    DataPedido = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    ProbabilidadeDefault = db.Column(db.Float, nullable=True)
+
 class FactTransacao(db.Model):
     __tablename__ = 'FactTransacao'
     TransacaoId = db.Column(db.Integer, primary_key=True)
@@ -53,10 +66,10 @@ class FactTransacao(db.Model):
 
 class FactInfoBancaria(db.Model):
     __tablename__ = 'FactInfoBancaria'
-    InfoId = db.Column(db.Integer, primary_key=True)
-    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
+    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), primary_key=True)
     Emprego = db.Column(db.String(50), nullable=True)
     EstadoCivil = db.Column(db.String(50), nullable=True)
+    Educacao = db.Column(db.String(50), nullable=True)
     DefaultCredit = db.Column(db.Boolean, nullable=True)
     Saldo = db.Column(db.Float, nullable=False)
     EmprestimoCasa = db.Column(db.Boolean, nullable=True)
@@ -170,11 +183,11 @@ def painel():
     user_type = session['user_type']
     
     if user_type == 'cliente':
-        utilizador = DimCliente.query.get(user_id)
+        utilizador = db.session.get(DimCliente, user_id)
     elif user_type == 'gestor':
-        utilizador = DimGestor.query.get(user_id)
+        utilizador = db.session.get(DimGestor, user_id)
     elif user_type == 'admin':
-        utilizador = DimAdmin.query.get(user_id)
+        utilizador = db.session.get(DimAdmin, user_id)
     
     return render_template('painel.html', utilizador=utilizador, papel=user_type.capitalize())
 
@@ -256,15 +269,20 @@ def index():
 @papel_obrigatorio('cliente')
 def meus_movimentos():
     user_id = session['utilizador_id']
-    cliente = DimCliente.query.get(user_id)
+    cliente = db.session.get(DimCliente, user_id)
     
     # Obter saldo e info bancária
     info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
     saldo = info_bancaria.Saldo if info_bancaria else 0.0
 
-    # Obter últimas transações (Home do Wireframe)
-    transacoes = FactTransacao.query.filter_by(ClienteId=user_id)\
-        .order_by(FactTransacao.DataTransacao.desc()).limit(10).all()
+    # Usar SQL puro para contornar o problema do modelo FactTransacao não ter uma PK correspondente na BD
+    sql_query = text("""
+        SELECT TOP 10 Descricao, Quantidade, DataTransacao
+        FROM FactTransacao
+        WHERE ClienteId = :user_id
+        ORDER BY DataTransacao DESC
+    """)
+    transacoes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
 
     return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
 
@@ -277,14 +295,18 @@ def minha_atividade():
     # Agregação para o gráfico de barras (Total Gasto/Mês)
     # Exemplo: Soma quantidades negativas (gastos) agrupadas por mês
     # NOTA: Agrupar também por ano para não misturar dados de anos diferentes.
-    gastos_por_mes = db.session.query(
-        func.year(FactTransacao.DataTransacao).label('ano'),
-        func.month(FactTransacao.DataTransacao).label('mes'),
-        func.sum(FactTransacao.Quantidade).label('total')
-    ).filter(
-        FactTransacao.ClienteId == user_id,
-        FactTransacao.Quantidade < 0  # Apenas gastos
-    ).group_by(func.year(FactTransacao.DataTransacao), func.month(FactTransacao.DataTransacao)).order_by('ano', 'mes').all()
+    # Usar SQL puro para contornar o problema do modelo FactTransacao
+    sql_query = text("""
+        SELECT
+            YEAR(DataTransacao) as ano,
+            MONTH(DataTransacao) as mes,
+            SUM(Quantidade) as total
+        FROM FactTransacao
+        WHERE ClienteId = :user_id AND Quantidade < 0
+        GROUP BY YEAR(DataTransacao), MONTH(DataTransacao)
+        ORDER BY ano, mes
+    """)
+    gastos_por_mes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
 
     # Passar estes dados para o Chart.js no frontend
     labels = [f"{d.ano}-{d.mes:02d}" for d in gastos_por_mes]
@@ -297,7 +319,7 @@ def minha_atividade():
 @papel_obrigatorio('cliente')
 def meu_perfil():
     user_id = session['utilizador_id']
-    cliente = DimCliente.query.get(user_id)
+    cliente = db.session.get(DimCliente, user_id)
     info = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
     
     return render_template('cliente_perfil.html', cliente=cliente, info=info)
@@ -323,7 +345,7 @@ def lista_clientes():
 @app.route('/detalhe-cliente/<int:id>')
 @papel_obrigatorio(['gestor', 'admin'])
 def detalhe_cliente(id):
-    cliente = DimCliente.query.get_or_404(id)
+    cliente = db.get_or_404(DimCliente, id)
     info = FactInfoBancaria.query.filter_by(ClienteId=id).first()
 
     # Lógica Simulada de Credit Score para o Gráfico
@@ -341,7 +363,7 @@ def detalhe_cliente(id):
 @app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
 def editar_cliente(id):
-    cliente = DimCliente.query.get_or_404(id)
+    cliente = db.get_or_404(DimCliente, id)
     info = FactInfoBancaria.query.filter_by(ClienteId=id).first()
 
     if request.method == 'POST':
@@ -369,8 +391,10 @@ def editar_cliente(id):
 def eliminar_cliente(id):
     # Nota: Numa base de dados real, cuidado com Foreign Keys (Transações, etc.)
     # Primeiro apagar dependências ou usar cascade delete no modelo
+    # Usar SQL puro para apagar transações, contornando o problema do modelo
+    sql_transacoes = text("DELETE FROM FactTransacao WHERE ClienteId = :cliente_id")
+    db.session.execute(sql_transacoes, {'cliente_id': id})
     FactInfoBancaria.query.filter_by(ClienteId=id).delete()
-    FactTransacao.query.filter_by(ClienteId=id).delete()
     DimCliente.query.filter_by(ClienteId=id).delete()
     
     db.session.commit()
@@ -400,6 +424,134 @@ def eliminar_gestor(id):
     db.session.commit()
     flash('Gestor eliminado.', 'sucesso')
     return redirect(url_for('lista_gestores'))
+
+def prever_default(cliente_id):
+    """
+    Usa o modelo de ML para prever a probabilidade de default de um cliente.
+    """
+    try:
+        artefacts = joblib.load('logit_model_artefacts.joblib')
+        model = artefacts['model']
+        model_columns = artefacts['model_columns']
+    except FileNotFoundError:
+        # Se o modelo não for encontrado, não é possível prever.
+        # Pode-se retornar um valor neutro ou lançar um erro.
+        return None
+
+    cliente = db.session.get(DimCliente, cliente_id)
+    info = FactInfoBancaria.query.filter_by(ClienteId=cliente_id).first()
+
+    if not all([cliente, info, cliente.DataNascimento, info.Emprego, info.EstadoCivil, info.Educacao]):
+        # Retorna None se faltarem dados essenciais para a previsão.
+        return None
+
+    # 1. Preparar os dados para a previsão
+    age = (datetime.now().date() - cliente.DataNascimento).days // 365
+    
+    dados_cliente = pd.DataFrame({
+        'age': [age],
+        'job': [info.Emprego],
+        'marital': [info.EstadoCivil],
+        'education': [info.Educacao],
+        'balance': [info.Saldo],
+        'housing': ['yes' if info.EmprestimoCasa else 'no'],
+        'loan': ['yes' if info.EmprestimoPessoal else 'no']
+    })
+
+    # 2. One-hot encode dos dados
+    dados_cliente_encoded = pd.get_dummies(dados_cliente, drop_first=True, dtype=int)
+
+    # 3. Alinhar colunas com as do modelo (importante para garantir consistência)
+    dados_cliente_aligned = dados_cliente_encoded.reindex(columns=model_columns, fill_value=0)
+
+    # 4. Adicionar constante para o modelo statsmodels
+    dados_cliente_const = sm.add_constant(dados_cliente_aligned, has_constant='add')
+
+    # 5. Fazer a previsão
+    probabilidade = model.predict(dados_cliente_const)
+    
+    return round(float(probabilidade.iloc[0]), 4)
+
+# --- ROTAS DE EMPRÉSTIMO ---
+
+@app.route('/pedir-emprestimo', methods=['GET', 'POST'])
+@autenticacao_obrigatoria
+@papel_obrigatorio('cliente')
+def pedir_emprestimo():
+    if request.method == 'POST':
+        valor = request.form.get('valor')
+        tipo_emprestimo = request.form.get('tipo_emprestimo')
+        user_id = session['utilizador_id']
+
+        try:
+            valor_float = float(valor)
+            if valor_float <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            flash('O valor do empréstimo deve ser um número positivo.', 'perigo')
+            return redirect(url_for('pedir_emprestimo'))
+
+        # Correr o modelo para prever a probabilidade de default (incumprimento)
+        probabilidade = prever_default(user_id)
+        
+        if probabilidade is None:
+            flash('Não foi possível calcular o risco. Por favor, garanta que todos os seus dados de perfil (emprego, estado civil, educação) estão preenchidos.', 'perigo')
+            return redirect(url_for('meu_perfil'))
+
+        limiar_rejeicao = 0.50
+        status = ''
+
+        if probabilidade > limiar_rejeicao:
+            # Pedido Rejeitado
+            status = 'rejeitado'
+            flash('O seu pedido de empréstimo foi rejeitado devido a um alto risco de incumprimento.', 'perigo')
+        else:
+            # Pedido Aprovado
+            status = 'aprovado'
+            
+            # 1. Guardar o empréstimo na nova tabela
+            novo_emprestimo = FactEmprestimo(
+                ClienteId=user_id,
+                Valor=valor_float,
+                TipoEmprestimo=tipo_emprestimo,
+                DataPedido=datetime.now().date(),
+                ProbabilidadeDefault=probabilidade
+            )
+            db.session.add(novo_emprestimo)
+            
+            # 2. Atualizar o saldo do cliente
+            info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
+            if info_bancaria:
+                info_bancaria.Saldo += valor_float
+                if tipo_emprestimo == 'pessoal':
+                    info_bancaria.EmprestimoPessoal = True
+                elif tipo_emprestimo == 'casa':
+                    info_bancaria.EmprestimoCasa = True
+            
+            db.session.commit()
+            flash(f'Parabéns! O seu empréstimo de €{valor_float:.2f} foi aprovado e o valor adicionado ao seu saldo.', 'sucesso')
+
+        return redirect(url_for('resultado_emprestimo', status=status, probabilidade=probabilidade))
+
+    return render_template('pedir_emprestimo.html')
+
+@app.route('/resultado-emprestimo')
+@autenticacao_obrigatoria
+@papel_obrigatorio('cliente')
+def resultado_emprestimo():
+    status = request.args.get('status')
+    probabilidade = request.args.get('probabilidade', type=float)
+
+    # Define o URL do GIF a ser mostrado com base no estado
+    gif_aprovado = 'https://media.tenor.com/FRtgI3P9GCYAAAAM/dive-into-money-money-bin.gif'
+    gif_rejeitado = 'https://media.tenor.com/43F34BI9HEQAAAAM/funny-cartoon-wolf.gif'
+    
+    gif_url = gif_aprovado if status == 'aprovado' else gif_rejeitado
+
+    return render_template('resultado_emprestimo.html', 
+                           status=status, 
+                           probabilidade=probabilidade,
+                           gif_url=gif_url)
 
 if __name__ == "__main__":
     with app.app_context():

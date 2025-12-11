@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Lista de Gestores{% endblock %}
+
+{% block content %}
+<h2>Gestão de Gestores</h2>
+
+<form method="GET" action="{{ url_for('lista_gestores') }}" class="mb-3">
+    <div class="input-group">
+        <input type="search" name="q" class="form-control" placeholder="Pesquisar por username..." value="{{ request.args.get('q', '') }}">
+        <button class="btn btn-outline-secondary" type="submit">Pesquisar</button>
+    </div>
+</form>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th class="text-end">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for gestor in gestores %}
+        <tr>
+            <td>{{ gestor.GestorId }}</td>
+            <td>{{ gestor.Username }}</td>
+            <td>{{ gestor.Email }}</td>
+            <td class="text-end">
+                <form action="{{ url_for('eliminar_gestor', id=gestor.GestorId) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem a certeza que quer eliminar este gestor?');">
+                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Meus Movimentos{% endblock %}
+
+{% block content %}
+<h2>Olá, {{ cliente.Nome }}!</h2>
+<p>Aqui pode consultar o seu saldo e as suas últimas transações.</p>
+
+<div class="card my-4">
+    <div class="card-body">
+        <h5 class="card-title">Saldo Atual</h5>
+        <p class="card-text fs-2">€ {{ "%.2f"|format(saldo) }}</p>
+    </div>
+</div>
+
+<h3>Últimas 10 Transações</h3>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Descrição</th>
+            <th class="text-end">Quantidade</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for transacao in transacoes %}
+        <tr>
+            <td>{{ transacao.DataTransacao.strftime('%d-%m-%Y') }}</td>
+            <td>{{ transacao.Descricao }}</td>
+            <td class="text-end {% if transacao.Quantidade < 0 %}text-danger{% else %}text-success{% endif %}">
+                € {{ "%.2f"|format(transacao.Quantidade) }}
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="3" class="text-center">Ainda não existem transações.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

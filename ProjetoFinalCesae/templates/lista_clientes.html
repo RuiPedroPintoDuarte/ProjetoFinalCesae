@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Lista de Clientes{% endblock %}
+
+{% block content %}
+<h2>Gestão de Clientes</h2>
+
+<form method="GET" action="{{ url_for('lista_clientes') }}" class="mb-3">
+    <div class="input-group">
+        <input type="search" name="q" class="form-control" placeholder="Pesquisar por nome ou NIF..." value="{{ request.args.get('q', '') }}">
+        <button class="btn btn-outline-secondary" type="submit">Pesquisar</button>
+    </div>
+</form>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>NIF</th>
+            <th class="text-end">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cliente in clientes %}
+        <tr>
+            <td>{{ cliente.ClienteId }}</td>
+            <td>{{ cliente.Nome }}</td>
+            <td>{{ cliente.Email }}</td>
+            <td>{{ cliente.NIF }}</td>
+            <td class="text-end">
+                <a href="{{ url_for('detalhe_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-info">Ver</a>
+                <a href="{{ url_for('editar_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-warning">Editar</a>
+                <form action="{{ url_for('eliminar_cliente', id=cliente.ClienteId) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem a certeza que quer eliminar este cliente?');">
+                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="5" class="text-center">Nenhum cliente encontrado.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
