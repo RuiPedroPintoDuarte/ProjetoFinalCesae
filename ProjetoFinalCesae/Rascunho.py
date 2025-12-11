@@ -1,78 +1,62 @@
 import pandas as pd
-import os
+import sqlalchemy
 import random
 import string
-import datetime
+import os
+from funcoes_database import addCliente
 
-import Repository
+pathFile = os.getcwd() + "//bank-full.csv"
 
-tableName = "DimCliente"
-engine = Repository.SQLConnection.engine
+server = 'localhost'
+database = 'BankDatabase'
 
-first_names = [
-    "Lucas", "Sofia", "Daniel", "Mia", "Gabriel",
-    "Olivia", "Leonardo", "Emma", "Matheus", "Isabella",
-    "Bruno", "Laura", "Rafael", "Camila", "Henrique",
-    "Beatriz", "Felipe", "Mariana", "Thiago", "Clara"
-]
+engine = sqlalchemy.create_engine(
+    f"mssql+pyodbc://@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
+)
 
-surnames = [
-    "Almeida", "Martins", "Costa", "Santos", "Ferreira",
-    "Rocha", "Carvalho", "Ribeiro", "Oliveira", "Sousa",
-    "Teixeira", "Mendes", "Barros", "Azevedo", "Duarte",
-    "Nogueira", "Correia", "Pinto", "Moreira", "Lopes"
-]
+columns = ["UtilizadorId", "Idade", "Emprego", "EstadoCivil", "Educacao",
+                  "DefaultCredit", "Saldo", "EmprestimoCasa", "EmprestimoPessoal",
+                  "Contacto", "DiaSemana", "Mes", "Duracao", "NContactos", "pDias",
+                  "ContactosPrevios", "pOutcome", "Subscreveu"]
 
-colunas = ["ClienteId", "Emprego", "EstadoCivil", "Educacao", "DefaultCredit", "Saldo",
-           "EmprestimoCasa", "EmprestimoPessoal", "DataRegisto"]
-colunas2 = ["ClienteId", "Nome", "DataNascimento", "NIF", "Username", "Email", "PalavraPasse"]
-pathFile = os.getcwd() + "\\bank-full.csv"
+columnsUtilizador = ["UtilizadorId", "Username", "Email", "PalavraPasse", "TipoUtilizador"]
+
+'''
+def createUtilizadorTable():
+    df = pd.read_csv("C://Users//User//Downloads//Churn_Modelling.csv")
+    passwords = df['Surname'] + "123"
+    emails = df['Surname'].str.lower( ) + "@gmail.com"
+    client_type = [1] * len(emails)
+    data_users = {"UtilizadorId": df['CustomerId'], "Username": df['Surname'], "Email": emails, "PalavraPasse": passwords, "TipoUtilizador": client_type}
+    df_users = pd.DataFrame(data_users)
+    df_users.to_sql(
+        "Utilizador",
+        engine,
+        if_exists="append",
+        index=False
+    )
+'''
 
 def createClienteTable():
     df = pd.read_csv(pathFile, delimiter=";")
-    print(df.columns)
-    df["housing"] = df["housing"].apply(lambda x: 1 if x == 'yes' else 0)
-    df["loan"] = df["loan"].apply(lambda x: 1 if x == 'yes' else 0)
-    df["default"] = df["loan"].apply(lambda x: 1 if x == 'yes' else 0)
-    new_df = []
-    new_df_2 = []
     for i in range(len(df)):
-        data = getDataNascimento(df["age"][i])
         letters = string.ascii_lowercase
-        nomeproprio = first_names[random.randint(0, len(first_names)-1)]
-        username = nomeproprio + str(random.randint(1,200))
-        name = nomeproprio + " " + surnames[random.randint(0, len(surnames)-1)]
-        email = username.lower() + "@gmail.com"
+        username = ''.join(random.choice(letters) for i in range(8))
+        email = username + "@gmail.com"
         password = username + "123"
-        date =  "2025-" + str(df["month"][i]) + "-" + str(df["day"][i])
-        #id = Repository.ClientRepository.addCliente(username, data, random.randint(100000000, 999999999), username, email, password)
-        #Repository.ClienteInfoRepository.addClienteInfo(id, df["job"][i], df["marital"][i], df["education"][i], df["default"][i],
-                                             #df["balance"][i], df["housing"][i], df["loan"][i], date)
-        new_df_2.append([i, name, data, random.randint(100000000, 999999999), username, email, password])
-        new_df.append([i, df["job"][i], df["marital"][i], df["education"][i], df["default"][i],
-                                             df["balance"][i], df["housing"][i], df["loan"][i], date])
-    new_df_2 = pd.DataFrame(new_df_2, columns = colunas2)
-    new_df_2.to_sql(
-        tableName,
-        engine,
-        if_exists="append",
-        index=False
-    )
-    new_df = pd.DataFrame(new_df, columns=colunas)
-    new_df.to_sql(
-        "FactInfoBancaria",
+        addCliente([username, email, password], list(df.iloc[i]))
+
+def createGestorAssociadoTable():
+    df = pd.read_csv("C://Users//User//Downloads//Churn_Modelling.csv")
+    data_gestor = {"UtilizadorId": df['CustomerId']}
+    df_gestor = pd.DataFrame(data_gestor)
+    df_gestor.to_sql(
+        "GestorAssociados",
         engine,
         if_exists="append",
         index=False
     )
 
-
-
-
-def getDataNascimento(idade):
-    dia = str(random.randint(1, 12))
-    mes = str(random.randint(1, 12))
-    ano = str(datetime.datetime.now().year - idade)
-    return ano + "-" + mes + "-" + dia
-
+#createUtilizadorTable()
 createClienteTable()
+#createGestorAssociadoTable()
