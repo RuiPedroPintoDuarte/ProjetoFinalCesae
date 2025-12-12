@@ -3,37 +3,46 @@
 {% block title %}Lista de Gestores{% endblock %}
 
 {% block content %}
-<h2>Gestão de Gestores</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestão de Gestores</h2>
+    <a href="{{ url_for('criar_gestor') }}" class="btn btn-primary"><i class="bi bi-person-plus-fill me-2"></i>Novo Gestor</a>
+</div>
 
-<form method="GET" action="{{ url_for('lista_gestores') }}" class="mb-3">
-    <div class="input-group">
-        <input type="search" name="q" class="form-control" placeholder="Pesquisar por username..." value="{{ request.args.get('q', '') }}">
-        <button class="btn btn-outline-secondary" type="submit">Pesquisar</button>
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('lista_gestores') }}" class="input-group">
+            <input type="search" name="q" class="form-control" placeholder="Pesquisar por username..." value="{{ request.args.get('q', '') }}">
+            <button class="btn btn-outline-primary" type="submit">Pesquisar</button>
+        </form>
     </div>
-</form>
+</div>
 
-<table class="table table-hover">
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
     <thead>
         <tr>
-            <th>ID</th>
+            <th class="ps-4">ID</th>
             <th>Username</th>
             <th>Email</th>
-            <th class="text-end">Ações</th>
+            <th class="text-end pe-4">Ações</th>
         </tr>
     </thead>
     <tbody>
         {% for gestor in gestores %}
         <tr>
-            <td>{{ gestor.GestorId }}</td>
+            <td class="ps-4 text-muted">#{{ gestor.GestorId }}</td>
             <td>{{ gestor.Username }}</td>
             <td>{{ gestor.Email }}</td>
-            <td class="text-end">
+            <td class="text-end pe-4">
                 <form action="{{ url_for('eliminar_gestor', id=gestor.GestorId) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem a certeza que quer eliminar este gestor?');">
-                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
                 </form>
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+    </div>
+</div>
 {% endblock %}
