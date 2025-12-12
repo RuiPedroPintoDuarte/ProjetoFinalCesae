@@ -33,7 +33,7 @@ def createClienteTable():
     print(df.columns)
     df["housing"] = df["housing"].apply(lambda x: 1 if x == 'yes' else 0)
     df["loan"] = df["loan"].apply(lambda x: 1 if x == 'yes' else 0)
-    df["default"] = df["loan"].apply(lambda x: 1 if x == 'yes' else 0)
+    df["default"] = df["default"].apply(lambda x: 1 if x == 'yes' else 0)
     new_df = []
     new_df_2 = []
     for i in range(len(df)):
@@ -48,8 +48,8 @@ def createClienteTable():
         #id = Repository.ClientRepository.addCliente(username, data, random.randint(100000000, 999999999), username, email, password)
         #Repository.ClienteInfoRepository.addClienteInfo(id, df["job"][i], df["marital"][i], df["education"][i], df["default"][i],
                                              #df["balance"][i], df["housing"][i], df["loan"][i], date)
-        new_df_2.append([i, name, data, random.randint(100000000, 999999999), username, email, password])
-        new_df.append([i, df["job"][i], df["marital"][i], df["education"][i], df["default"][i],
+        new_df_2.append([i+1, name, data, random.randint(100000000, 999999999), username, email, password])
+        new_df.append([i+1, df["job"][i], df["marital"][i], df["education"][i], df["default"][i],
                                              df["balance"][i], df["housing"][i], df["loan"][i], date])
     new_df_2 = pd.DataFrame(new_df_2, columns = colunas2)
     new_df_2.to_sql(
