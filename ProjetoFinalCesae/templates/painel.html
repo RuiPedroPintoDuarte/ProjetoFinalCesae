@@ -3,44 +3,52 @@
 {% block title %}Painel de Controlo{% endblock %}
 
 {% block content %}
-<div class="p-5 mb-4 bg-light rounded-3">
-    <div class="container-fluid py-5">
-        <h1 class="display-5 fw-bold">Bem-vindo, {{ session.username }}!</h1>
-        <p class="col-md-8 fs-4">Este é o seu painel de controlo. O seu nível de acesso é: <strong>{{ papel }}</strong>.</p>
+<div class="p-5 mb-4 bg-white rounded-3 shadow-sm border">
+    <div class="container-fluid py-3">
+        <h1 class="display-6 fw-bold text-primary">Bem-vindo, {{ session.username }}!</h1>
+        <p class="col-md-8 fs-5 text-muted">Painel de Controlo | Acesso: <span class="badge bg-secondary">{{ papel }}</span></p>
     </div>
 </div>
 
 <div class="row">
     {% if papel == 'Cliente' %}
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Meus Movimentos</h5>
-                <p class="card-text">Consulte o seu saldo e as últimas transações.</p>
-                <a href="{{ url_for('meus_movimentos') }}" class="btn btn-primary">Aceder</a>
+        <div class="card text-center h-100 py-4">
+            <div class="card-body d-flex flex-column align-items-center">
+                <i class="bi bi-wallet2 widget-icon"></i>
+                <h5 class="card-title">Movimentos & Saldo</h5>
+                <p class="card-text text-muted">Consulte o seu saldo atual e histórico de transações.</p>
+                <a href="{{ url_for('meus_movimentos') }}" class="btn btn-outline-primary mt-auto stretched-link">Consultar</a>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Minha Atividade</h5>
-                <p class="card-text">Veja um resumo gráfico dos seus gastos mensais.</p>
-                <a href="{{ url_for('minha_atividade') }}" class="btn btn-primary">Ver Gráfico</a>
+        <div class="card text-center h-100 py-4">
+            <div class="card-body d-flex flex-column align-items-center">
+                <i class="bi bi-graph-up-arrow widget-icon"></i>
+                <h5 class="card-title">Análise de Gastos</h5>
+                <p class="card-text text-muted">Visualize graficamente a evolução das suas despesas.</p>
+                <a href="{{ url_for('minha_atividade') }}" class="btn btn-outline-primary mt-auto stretched-link">Ver Gráficos</a>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Meu Perfil</h5>
-                <p class="card-text">Consulte e gira os seus dados pessoais e bancários.</p>
-                <a href="{{ url_for('meu_perfil') }}" class="btn btn-primary">Ver Perfil</a>
+        <div class="card text-center h-100 py-4">
+            <div class="card-body d-flex flex-column align-items-center">
+                <i class="bi bi-person-circle widget-icon"></i>
+                <h5 class="card-title">Dados Pessoais</h5>
+                <p class="card-text text-muted">Atualize as suas informações e dados bancários.</p>
+                <a href="{{ url_for('meu_perfil') }}" class="btn btn-outline-primary mt-auto stretched-link">Gerir Perfil</a>
             </div>
         </div>
     </div>
     {% else %}
-    <p>Utilize a barra de navegação para gerir clientes e gestores.</p>
+    <div class="col-12">
+        <div class="alert alert-info d-flex align-items-center">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <div>Utilize a barra de navegação superior para aceder às ferramentas de gestão de Clientes e Gestores.</div>
+        </div>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

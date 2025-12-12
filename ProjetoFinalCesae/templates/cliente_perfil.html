@@ -3,33 +3,80 @@
 {% block title %}Meu Perfil{% endblock %}
 
 {% block content %}
-<h2>Meu Perfil</h2>
-<p>Consulte os seus dados pessoais e informação bancária.</p>
+<div class="mb-4">
+    <h2>Meu Perfil</h2>
+    <p class="text-muted">Gestão de dados pessoais e bancários</p>
+</div>
 
 <div class="row">
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Dados Pessoais</div>
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-person-badge me-2"></i>Dados Pessoais</div>
             <div class="card-body">
-                <p><strong>Nome:</strong> {{ cliente.Nome or 'Não definido' }}</p>
-                <p><strong>Username:</strong> {{ cliente.Username }}</p>
-                <p><strong>Email:</strong> {{ cliente.Email }}</p>
-                <p><strong>Data de Nascimento:</strong> {{ cliente.DataNascimento.strftime('%d-%m-%Y') if cliente.DataNascimento else 'Não definida' }}</p>
-                <p><strong>NIF:</strong> {{ cliente.NIF or 'Não definido' }}</p>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Nome</span>
+                        <span class="fw-bold">{{ cliente.Nome or 'Não definido' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Username</span>
+                        <span>{{ cliente.Username }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Email</span>
+                        <span>{{ cliente.Email }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Data de Nascimento</span>
+                        <span>{{ cliente.DataNascimento.strftime('%d-%m-%Y') if cliente.DataNascimento else 'Não definida' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span class="text-muted">NIF</span>
+                        <span>{{ cliente.NIF or 'Não definido' }}</span>
+                    </li>
+                </ul>
             </div>
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Informação Bancária</div>
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-bank me-2"></i>Informação Bancária</div>
             {% if info %}
             <div class="card-body">
-                <p><strong>Emprego:</strong> {{ info.Emprego or 'Não definido' }}</p>
-                <p><strong>Estado Civil:</strong> {{ info.EstadoCivil or 'Não definido' }}</p>
-                <p><strong>Crédito em Default:</strong> {{ 'Sim' if info.DefaultCredit else 'Não' }}</p>
-                <p><strong>Empréstimo da Casa:</strong> {{ 'Sim' if info.EmprestimoCasa else 'Não' }}</p>
-                <p><strong>Empréstimo Pessoal:</strong> {{ 'Sim' if info.EmprestimoPessoal else 'Não' }}</p>
-                <p><strong>Cliente desde:</strong> {{ info.DataRegisto.strftime('%d-%m-%Y') if info.DataRegisto else 'Não definida' }}</p>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="small text-muted">Emprego</label>
+                        <div class="fw-bold">{{ info.Emprego or 'Não definido' }}</div>
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-muted">Estado Civil</label>
+                        <div class="fw-bold">{{ info.EstadoCivil or 'Não definido' }}</div>
+                    </div>
+                    <div class="col-12"><hr class="my-2"></div>
+                    <div class="col-6">
+                        <label class="small text-muted">Empréstimo Habitação</label>
+                        <div>
+                            {% if info.EmprestimoCasa %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-muted">Empréstimo Pessoal</label>
+                        <div>
+                            {% if info.EmprestimoPessoal %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Não</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-12 mt-4 text-end">
+                        <small class="text-muted">Cliente desde {{ info.DataRegisto.strftime('%d-%m-%Y') if info.DataRegisto else '-' }}</small>
+                    </div>
+                </div>
             </div>
             {% else %}
             <div class="card-body">

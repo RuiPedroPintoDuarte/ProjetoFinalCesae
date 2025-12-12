@@ -3,45 +3,58 @@
 {% block title %}Lista de Clientes{% endblock %}
 
 {% block content %}
-<h2>Gestão de Clientes</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Gestão de Clientes</h2>
+    <a href="{{ url_for('criar_cliente') }}" class="btn btn-primary"><i class="bi bi-person-plus me-2"></i>Novo Cliente</a>
+</div>
 
-<form method="GET" action="{{ url_for('lista_clientes') }}" class="mb-3">
-    <div class="input-group">
-        <input type="search" name="q" class="form-control" placeholder="Pesquisar por nome ou NIF..." value="{{ request.args.get('q', '') }}">
-        <button class="btn btn-outline-secondary" type="submit">Pesquisar</button>
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('lista_clientes') }}" class="row g-2">
+            <div class="col-md-10">
+                <input type="search" name="q" class="form-control" placeholder="Pesquisar por nome ou NIF..." value="{{ request.args.get('q', '') }}">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-search me-1"></i> Pesquisar</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 
-<table class="table table-hover">
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
     <thead>
         <tr>
-            <th>ID</th>
+            <th class="ps-4">ID</th>
             <th>Nome</th>
             <th>Email</th>
             <th>NIF</th>
-            <th class="text-end">Ações</th>
+            <th class="text-end pe-4">Ações</th>
         </tr>
     </thead>
     <tbody>
         {% for cliente in clientes %}
         <tr>
-            <td>{{ cliente.ClienteId }}</td>
-            <td>{{ cliente.Nome }}</td>
+            <td class="ps-4 text-muted">#{{ cliente.ClienteId }}</td>
+            <td class="fw-500">{{ cliente.Nome }}</td>
             <td>{{ cliente.Email }}</td>
             <td>{{ cliente.NIF }}</td>
-            <td class="text-end">
-                <a href="{{ url_for('detalhe_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-info">Ver</a>
-                <a href="{{ url_for('editar_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-warning">Editar</a>
+            <td class="text-end pe-4">
+                <a href="{{ url_for('detalhe_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
+                <a href="{{ url_for('editar_cliente', id=cliente.ClienteId) }}" class="btn btn-sm btn-outline-secondary" title="Editar"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('eliminar_cliente', id=cliente.ClienteId) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem a certeza que quer eliminar este cliente?');">
-                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="bi bi-trash"></i></button>
                 </form>
             </td>
         </tr>
         {% else %}
         <tr>
-            <td colspan="5" class="text-center">Nenhum cliente encontrado.</td>
+            <td colspan="5" class="text-center py-4 text-muted">Nenhum cliente encontrado.</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+    </div>
+</div>
 {% endblock %}

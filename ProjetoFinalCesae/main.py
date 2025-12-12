@@ -300,19 +300,7 @@ def meus_movimentos():
     """)
     transacoes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
     
-    # Formatar valores para apresentação
-    transacoes_formatadas = []
-    for t in transacoes:
-        transacoes_formatadas.append({
-            'Descricao': t.Descricao,
-            'Quantidade': formatar_numero_pt(t.Quantidade),
-            'DataTransacao': t.DataTransacao
-        })
-    
-    saldo_formatado = formatar_numero_pt(saldo)
-
     return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
-    return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo_formatado, transacoes=transacoes_formatadas)
 
 @app.route('/minha-atividade')
 @autenticacao_obrigatoria
