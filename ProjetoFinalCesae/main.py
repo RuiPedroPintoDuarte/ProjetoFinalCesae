@@ -8,6 +8,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
+from Repository import ClientRepository
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes'
@@ -19,7 +20,7 @@ bcrypt = Bcrypt(app)
 # Modelos de Dimensão
 class DimCliente(db.Model):
     __tablename__ = 'DimCliente'
-    ClienteId = db.Column(db.Integer, primary_key=True)
+    ClienteId = db.Column(db.Integer, primary_key=True, autoincrement=False)
     Nome = db.Column(db.String(120), nullable=True)
     DataNascimento = db.Column(db.Date, nullable=True)
     NIF = db.Column(db.String(20), unique=True, nullable=True)
@@ -132,7 +133,12 @@ def registo():
             return redirect(url_for('registo'))
 
         # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
-        novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        novo_id = ClientRepository.getNextId()
+        if ClientRepository.verificarClienteId(novo_id):
+            flash('Erro: ID de cliente já existe. Tente novamente.', 'perigo')
+            return redirect(url_for('criar_cliente'))
+
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
@@ -243,7 +249,12 @@ def criar_cliente():
             return redirect(url_for('criar_cliente'))
 
         # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
-        novo_cliente = DimCliente(Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        novo_id = ClientRepository.getNextId()
+        if ClientRepository.verificarClienteId(novo_id):
+            flash('Erro: ID de cliente já existe.', 'perigo')
+            return redirect(url_for('criar_cliente'))
+
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
@@ -359,15 +370,23 @@ def meu_perfil():
 @papel_obrigatorio(['gestor', 'admin'])
 def lista_clientes():
     search_query = request.args.get('q')
+    user_type = session.get('user_type')
+    user_id = session.get('utilizador_id')
+    
+    query = DimCliente.query
+
+    if user_type == 'gestor':
+        query = query.join(FactGestorCliente, DimCliente.ClienteId == FactGestorCliente.ClienteId)\
+                     .filter(FactGestorCliente.GestorId == user_id)
     
     if search_query:
         # Pesquisa por nome ou NIF
-        clientes = DimCliente.query.filter(
+        query = query.filter(
             (DimCliente.Nome.contains(search_query)) | 
             (DimCliente.NIF.contains(search_query))
-        ).all()
-    else:
-        clientes = DimCliente.query.all()
+        )
+
+    clientes = query.all()
 
     return render_template('lista_clientes.html', clientes=clientes)
 
