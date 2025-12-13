@@ -1,9 +1,8 @@
 from flask import Flask, request, render_template, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from flask_bcrypt import Bcrypt
 from datetime import datetime
 from functools import wraps
-from sqlalchemy import func, text
+from sqlalchemy import text
 import joblib
 import pandas as pd
 import numpy as np
@@ -15,7 +14,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?
 # Em produção, esta chave deve ser carregada de uma variável de ambiente e não estar hardcoded.
 app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
 db = SQLAlchemy(app)
-bcrypt = Bcrypt(app)
 
 # Modelos de Dimensão
 class DimCliente(db.Model):
@@ -47,15 +45,6 @@ class FactGestorCliente(db.Model):
     __tablename__ = 'FactGestorCliente'
     GestorId = db.Column(db.Integer, db.ForeignKey('DimGestor.GestorId'), primary_key=True)
     ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), primary_key=True)
-
-class FactEmprestimo(db.Model):
-    __tablename__ = 'FactEmprestimo'
-    EmprestimoId = db.Column(db.Integer, primary_key=True)
-    ClienteId = db.Column(db.Integer, db.ForeignKey('DimCliente.ClienteId'), nullable=False)
-    Valor = db.Column(db.Float, nullable=False)
-    TipoEmprestimo = db.Column(db.String(50), nullable=False)
-    DataPedido = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    ProbabilidadeDefault = db.Column(db.Float, nullable=True)
 
 class FactTransacao(db.Model):
     __tablename__ = 'FactTransacao'
@@ -378,23 +367,35 @@ def lista_clientes():
 
     return render_template('lista_clientes.html', clientes=clientes)
 
-@app.route('/detalhe-cliente/<int:id>')
+@app.route('/detalhe-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
 def detalhe_cliente(id):
     cliente = db.get_or_404(DimCliente, id)
     info = FactInfoBancaria.query.filter_by(ClienteId=id).first()
 
-    # Lógica Simulada de Credit Score para o Gráfico
-    score = 0
-    if info:
-        if not info.DefaultCredit: score += 50
-        if info.Saldo > 1000: score += 20
-        if info.Emprego: score += 30
+    valor_simulado = 0
+    risco_percent = 0
+
+    if request.method == 'POST':
+        # Processar a simulação
+        try:
+            valor_input = request.form.get('valor', '0')
+            valor_simulado = float(valor_input.replace('.', '').replace(',', '.'))
+        except ValueError:
+            valor_simulado = 0
+        
+        probabilidade = prever_default(id, simulacao_valor=valor_simulado)
+    else:
+        # Apenas visualizar (risco base sem empréstimo novo)
+        probabilidade = prever_default(id, simulacao_valor=0)
+
+    if probabilidade is not None:
+        risco_percent = round(probabilidade * 100, 1)
     
     # Dados para o gráfico circular (Pie Chart)
-    chart_data = {'Score': score, 'Risco': 100 - score}
+    chart_data = {'Score': 100 - risco_percent, 'Risco': risco_percent}
 
-    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data)
+    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_simulado)
 
 @app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
@@ -461,7 +462,7 @@ def eliminar_gestor(id):
     flash('Gestor eliminado.', 'sucesso')
     return redirect(url_for('lista_gestores'))
 
-def prever_default(cliente_id):
+def prever_default(cliente_id, simulacao_valor=0):
     """
     Usa o modelo de ML para prever a probabilidade de default de um cliente.
     """
@@ -505,105 +506,26 @@ def prever_default(cliente_id):
 
     # 5. Fazer a previsão
     probabilidade = model.predict(dados_cliente_const)
+    probabilidade_final = float(probabilidade.iloc[0])
     
-    return round(float(probabilidade.iloc[0]), 4)
-
-# --- ROTAS DE EMPRÉSTIMO ---
-
-@app.route('/pedir-emprestimo', methods=['GET', 'POST'])
-@autenticacao_obrigatoria
-@papel_obrigatorio('cliente')
-def pedir_emprestimo():
-    if request.method == 'POST':
-        valor = request.form.get('valor')
-        tipo_emprestimo = request.form.get('tipo_emprestimo')
-        user_id = session['utilizador_id']
-
-        try:
-            # Tratar formato de número (ex: 350.000 -> 350000)
-            if valor:
-                valor = valor.replace('.', '').replace(',', '.')
-            valor_float = float(valor)
-            if valor_float <= 0:
-                raise ValueError()
-        except (ValueError, TypeError):
-            flash('O valor do empréstimo deve ser um número positivo.', 'perigo')
-            return redirect(url_for('pedir_emprestimo'))
-
-        # Correr o modelo para prever a probabilidade de default (incumprimento)
-        probabilidade = prever_default(user_id)
+    # 6. Regra de Negócio: Penalização por valor do empréstimo vs Saldo
+    # O modelo de ML original não conhece o valor do pedido, por isso aplicamos uma penalização manual.
+    if simulacao_valor > 0:
+        # Usamos max(1, saldo) para evitar divisão por zero ou números negativos
+        saldo_ref = max(info.Saldo, 1.0)
+        racio = simulacao_valor / saldo_ref
         
-        if probabilidade is None:
-            flash('Não foi possível calcular o risco. Por favor, garanta que todos os seus dados de perfil (emprego, estado civil, educação) estão preenchidos.', 'perigo')
-            return redirect(url_for('meu_perfil'))
-
-        limiar_rejeicao = 0.50
-        status = ''
-
-        if probabilidade > limiar_rejeicao:
-            # Pedido Rejeitado
-            status = 'rejeitado'
-            flash('O seu pedido de empréstimo foi rejeitado devido a um alto risco de incumprimento.', 'perigo')
-        else:
-            # Pedido Aprovado
-            status = 'aprovado'
+        penalizacao = 0.0
+        if racio > 50:      # Pedir 50x mais do que tem
+            penalizacao = 0.90
+        elif racio > 20:    # Pedir 20x mais
+            penalizacao = 0.50
+        elif racio > 5:     # Pedir 5x mais
+            penalizacao = 0.20
             
-            # 1. Guardar o empréstimo na nova tabela
-            novo_emprestimo = FactEmprestimo(
-                ClienteId=user_id,
-                Valor=valor_float,
-                TipoEmprestimo=tipo_emprestimo,
-                DataPedido=datetime.now().date(),
-                ProbabilidadeDefault=probabilidade
-            )
-            db.session.add(novo_emprestimo)
-            
-            # 2. Atualizar o saldo do cliente
-            info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
-            if info_bancaria:
-                info_bancaria.Saldo += valor_float
-                if tipo_emprestimo == 'pessoal':
-                    info_bancaria.EmprestimoPessoal = True
-                elif tipo_emprestimo == 'casa':
-                    info_bancaria.EmprestimoCasa = True
-            
-            # 3. Registar a transação na FactTransacao para aparecer nos movimentos
-            nova_transacao = FactTransacao(
-                ClienteId=user_id,
-                Descricao=f"Empréstimo {tipo_emprestimo.capitalize()} Aprovado",
-                Categoria=f"Empréstimo {tipo_emprestimo.capitalize()}",
-                Quantidade=valor_float,
-                DataTransacao=datetime.now().date()
-            )
-            db.session.add(nova_transacao)
-            
-            db.session.commit()
-            # Formatar valor para PT (ex: 350.000,00)
-            valor_formatado = f"{valor_float:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            valor_formatado = formatar_numero_pt(valor_float)
-            flash(f'Parabéns! O seu empréstimo de €{valor_formatado} foi aprovado e o valor adicionado ao seu saldo.', 'sucesso')
-
-        return redirect(url_for('resultado_emprestimo', status=status, probabilidade=probabilidade))
-
-    return render_template('pedir_emprestimo.html')
-
-@app.route('/resultado-emprestimo')
-@autenticacao_obrigatoria
-@papel_obrigatorio('cliente')
-def resultado_emprestimo():
-    status = request.args.get('status')
-    probabilidade = request.args.get('probabilidade', type=float)
-
-    # Define o URL do GIF a ser mostrado com base no estado
-    gif_aprovado = 'https://media.tenor.com/FRtgI3P9GCYAAAAM/dive-into-money-money-bin.gif'
-    gif_rejeitado = 'https://media.tenor.com/43F34BI9HEQAAAAM/funny-cartoon-wolf.gif'
+        probabilidade_final = min(probabilidade_final + penalizacao, 1.0)
     
-    gif_url = gif_aprovado if status == 'aprovado' else gif_rejeitado
-
-    return render_template('resultado_emprestimo.html', 
-                           status=status, 
-                           probabilidade=probabilidade,
-                           gif_url=gif_url)
+    return round(probabilidade_final, 4)
 
 if __name__ == "__main__":
     with app.app_context():

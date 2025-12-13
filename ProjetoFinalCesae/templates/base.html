@@ -27,7 +27,6 @@
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('meus_movimentos') }}">Movimentos</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('minha_atividade') }}">Atividade</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('meu_perfil') }}">Perfil</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('pedir_emprestimo') }}">Empréstimos</a></li>
                     {% endif %}
 
                     {% if session.user_type in ['gestor', 'admin'] %}
