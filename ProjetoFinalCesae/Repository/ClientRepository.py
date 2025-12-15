@@ -52,5 +52,4 @@ def verificarClienteId(clienteId):
     ids = getClienteIds()
     return clienteId in ids
 
-print(alterValue(1, "fogooooo", "PalavraPasse"))
 #addCliente("Ano", "2002-07-29", 234577888, "Boy", "gir@gmail", "ghas")

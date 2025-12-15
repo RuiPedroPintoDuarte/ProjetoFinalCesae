@@ -5,6 +5,7 @@ from functools import wraps
 from sqlalchemy import text
 import joblib
 import pandas as pd
+import os
 import numpy as np
 import statsmodels.api as sm
 from Repository import ClientRepository
@@ -12,7 +13,8 @@ from Repository import ClientRepository
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes'
 # Em produção, esta chave deve ser carregada de uma variável de ambiente e não estar hardcoded.
-app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
+# Gera uma chave aleatória a cada arranque para invalidar sessões anteriores
+app.config['SECRET_KEY'] = os.urandom(24)
 db = SQLAlchemy(app)
 
 # Modelos de Dimensão
@@ -384,7 +386,8 @@ def detalhe_cliente(id):
         except ValueError:
             valor_simulado = 0
         
-        probabilidade = prever_default(id, simulacao_valor=valor_simulado)
+        tipo_emprestimo = request.form.get('tipo_emprestimo', 'pessoal')
+        probabilidade = prever_default(id, simulacao_valor=valor_simulado, tipo_emprestimo=tipo_emprestimo)
     else:
         # Apenas visualizar (risco base sem empréstimo novo)
         probabilidade = prever_default(id, simulacao_valor=0)
@@ -395,7 +398,17 @@ def detalhe_cliente(id):
     # Dados para o gráfico circular (Pie Chart)
     chart_data = {'Score': 100 - risco_percent, 'Risco': risco_percent}
 
-    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_simulado)
+    # Formatar o valor para exibição no input HTML
+    # O parser espera formato PT (1.000,00), mas o Python gera formato US (1000.00).
+    # Se enviarmos 1000.0, o parser remove o ponto (milhar) e vira 10000.
+    valor_exibicao = valor_simulado
+    if isinstance(valor_simulado, float):
+        if valor_simulado.is_integer():
+            valor_exibicao = int(valor_simulado)
+        else:
+            valor_exibicao = f"{valor_simulado:.2f}".replace('.', ',')
+
+    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_exibicao)
 
 @app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
@@ -462,7 +475,7 @@ def eliminar_gestor(id):
     flash('Gestor eliminado.', 'sucesso')
     return redirect(url_for('lista_gestores'))
 
-def prever_default(cliente_id, simulacao_valor=0):
+def prever_default(cliente_id, simulacao_valor=0, tipo_emprestimo='pessoal'):
     """
     Usa o modelo de ML para prever a probabilidade de default de um cliente.
     """
@@ -485,14 +498,33 @@ def prever_default(cliente_id, simulacao_valor=0):
     # 1. Preparar os dados para a previsão
     age = (datetime.now().date() - cliente.DataNascimento).days // 365
     
+    # Ajustar dados com base na simulação
+    # Para usar apenas o modelo, refletimos o empréstimo como uma redução do "património líquido" (Saldo)
+    # e ativamos a flag do tipo de empréstimo correspondente.
+    saldo_final = info.Saldo
+    tem_casa = 'yes' if info.EmprestimoCasa else 'no'
+    tem_pessoal = 'yes' if info.EmprestimoPessoal else 'no'
+
+    if simulacao_valor > 0:
+        if 'habita' in str(tipo_emprestimo).lower() or 'casa' in str(tipo_emprestimo).lower():
+            tem_casa = 'yes'
+            # Empréstimo Habitação: O impacto no "saldo/liquidez" é menor pois existe um ativo (casa).
+            # Consideramos apenas 20% do valor como impacto imediato no perfil de risco financeiro.
+            saldo_final = info.Saldo - (simulacao_valor * 0.20)
+        else:
+            tem_pessoal = 'yes'
+            # Empréstimo Pessoal: Considerado dívida de consumo ou sem garantia forte.
+            # O impacto é total no saldo ajustado para o modelo.
+            saldo_final = info.Saldo - simulacao_valor
+
     dados_cliente = pd.DataFrame({
         'age': [age],
         'job': [info.Emprego],
         'marital': [info.EstadoCivil],
         'education': [info.Educacao],
-        'balance': [info.Saldo],
-        'housing': ['yes' if info.EmprestimoCasa else 'no'],
-        'loan': ['yes' if info.EmprestimoPessoal else 'no']
+        'balance': [saldo_final],
+        'housing': [tem_casa],
+        'loan': [tem_pessoal]
     })
 
     # 2. One-hot encode dos dados
@@ -507,23 +539,6 @@ def prever_default(cliente_id, simulacao_valor=0):
     # 5. Fazer a previsão
     probabilidade = model.predict(dados_cliente_const)
     probabilidade_final = float(probabilidade.iloc[0])
-    
-    # 6. Regra de Negócio: Penalização por valor do empréstimo vs Saldo
-    # O modelo de ML original não conhece o valor do pedido, por isso aplicamos uma penalização manual.
-    if simulacao_valor > 0:
-        # Usamos max(1, saldo) para evitar divisão por zero ou números negativos
-        saldo_ref = max(info.Saldo, 1.0)
-        racio = simulacao_valor / saldo_ref
-        
-        penalizacao = 0.0
-        if racio > 50:      # Pedir 50x mais do que tem
-            penalizacao = 0.90
-        elif racio > 20:    # Pedir 20x mais
-            penalizacao = 0.50
-        elif racio > 5:     # Pedir 5x mais
-            penalizacao = 0.20
-            
-        probabilidade_final = min(probabilidade_final + penalizacao, 1.0)
     
     return round(probabilidade_final, 4)
 
