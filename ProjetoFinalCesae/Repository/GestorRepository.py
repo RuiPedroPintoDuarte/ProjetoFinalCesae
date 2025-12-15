@@ -48,4 +48,4 @@ def alterValue(GestorId, novoValor, campoDoNovoValor):
         conn.commit()
         return result.rowcount > 0
 
-addGestor("Gerunbindio", "gerunbindio@gmail.com", "gerundando")
+#addGestor("Gerunbindio", "gerunbindio@gmail.com", "gerundando")

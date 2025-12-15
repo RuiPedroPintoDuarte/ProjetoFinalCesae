@@ -48,4 +48,4 @@ def alterValue(AdminId, novoValor, campoDoNovoValor):
         conn.commit()
         return result.rowcount > 0
 
-addAdmin("GerunbindioAdmin", "gerunbindio@gmail.com", "gerundando")
+#addAdmin("GerunbindioAdmin", "gerunbindio@gmail.com", "gerundando")
