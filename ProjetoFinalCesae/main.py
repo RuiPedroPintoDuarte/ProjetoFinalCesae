@@ -282,14 +282,8 @@ def meus_movimentos():
     info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
     saldo = info_bancaria.Saldo if info_bancaria else 0.0
 
-    # Usar SQL puro para contornar o problema do modelo FactTransacao não ter uma PK correspondente na BD
-    sql_query = text("""
-        SELECT TOP 10 Descricao, Quantidade, DataTransacao
-        FROM FactTransacao
-        WHERE ClienteId = :user_id
-        ORDER BY DataTransacao DESC
-    """)
-    transacoes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+    # Consulta atualizada para usar o ORM (mais limpo e seguro)
+    transacoes = FactTransacao.query.filter_by(ClienteId=user_id).order_by(FactTransacao.DataTransacao.desc()).limit(10).all()
     
     return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
 
@@ -299,11 +293,29 @@ def meus_movimentos():
 def minha_atividade():
     user_id = session['utilizador_id']
     
+    # Filtros da Query String
+    ano_filtro = request.args.get('ano')
+    mes_filtro = request.args.get('mes')
+
+    # Obter anos disponíveis para o dropdown
+    sql_anos = text("SELECT DISTINCT YEAR(DataTransacao) as ano FROM FactTransacao WHERE ClienteId = :user_id ORDER BY ano DESC")
+    anos_result = db.session.execute(sql_anos, {'user_id': user_id}).fetchall()
+    anos_disponiveis = [row.ano for row in anos_result]
+
+    # Construção dinâmica dos filtros SQL
+    params = {'user_id': user_id}
+    filtro_sql = ""
+    
+    if ano_filtro and ano_filtro.isdigit():
+        filtro_sql += " AND YEAR(DataTransacao) = :ano"
+        params['ano'] = int(ano_filtro)
+        
+    if mes_filtro and mes_filtro.isdigit():
+        filtro_sql += " AND MONTH(DataTransacao) = :mes"
+        params['mes'] = int(mes_filtro)
+    
     # Agregação para o gráfico de barras (Total Gasto/Mês)
-    # Exemplo: Soma quantidades negativas (gastos) agrupadas por mês
-    # NOTA: Agrupar também por ano para não misturar dados de anos diferentes.
-    # Usar SQL puro para contornar o problema do modelo FactTransacao
-    sql_query = text("""
+    sql_query = text(f"""
         SELECT
             YEAR(DataTransacao) as ano,
             MONTH(DataTransacao) as mes,
@@ -317,20 +329,40 @@ def minha_atividade():
                     ELSE 0 
                 END as QtdAjustada
             FROM FactTransacao
-            WHERE ClienteId = :user_id
+            WHERE ClienteId = :user_id {filtro_sql}
         ) AS Valores
         WHERE QtdAjustada < 0
         GROUP BY YEAR(DataTransacao), MONTH(DataTransacao)
         ORDER BY ano, mes
     """)
-    gastos_por_mes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+    gastos_por_mes = db.session.execute(sql_query, params).fetchall()
 
 
     # Passar estes dados para o Chart.js no frontend
     labels = [f"{d.ano}-{d.mes:02d}" for d in gastos_por_mes]
     values = [abs(d.total) for d in gastos_por_mes] # Valor absoluto para o gráfico
 
-    return render_template('cliente_atividade.html', labels=labels, values=values)
+    # Agregação para o gráfico circular (Total Gasto/Categoria)
+    sql_query_cat = text(f"""
+        SELECT 
+            ISNULL(Categoria, 'Outros') as Categoria,
+            SUM(ABS(Quantidade)) as Total
+        FROM FactTransacao
+        WHERE ClienteId = :user_id AND Quantidade < 0 {filtro_sql}
+        GROUP BY Categoria
+        ORDER BY Total DESC
+    """)
+    gastos_cat = db.session.execute(sql_query_cat, params).fetchall()
+    
+    labels_cat = [row.Categoria for row in gastos_cat]
+    values_cat = [float(row.Total) for row in gastos_cat]
+
+    return render_template('cliente_atividade.html', 
+                           labels=labels, values=values, 
+                           labels_cat=labels_cat, values_cat=values_cat,
+                           anos_disponiveis=anos_disponiveis,
+                           ano_selecionado=int(ano_filtro) if ano_filtro and ano_filtro.isdigit() else None,
+                           mes_selecionado=int(mes_filtro) if mes_filtro and mes_filtro.isdigit() else None)
 
 
 @app.route('/meu-perfil')
