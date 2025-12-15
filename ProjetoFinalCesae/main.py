@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+import bcrypt
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import text
@@ -30,7 +31,7 @@ class DimCliente(db.Model):
 
 class DimGestor(db.Model):
     __tablename__ = 'DimGestor'
-    GestorId = db.Column(db.Integer, primary_key=True)
+    GestorId = db.Column(db.Integer, primary_key=True, autoincrement=False)
     Username = db.Column(db.String(120), nullable=False, unique=True)
     Email = db.Column(db.String(120), nullable=False, unique=True)
     PalavraPasse = db.Column(db.String(120), nullable=False)
@@ -123,13 +124,13 @@ def registo():
             flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
             return redirect(url_for('registo'))
 
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_id = ClientRepository.getNextId()
         if ClientRepository.verificarClienteId(novo_id):
             flash('Erro: ID de cliente já existe. Tente novamente.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
@@ -153,16 +154,15 @@ def login():
         logged_in_user = None
         user_type = None
 
-        # TODO: A verificação da palavra-passe é feita em texto simples. Implementar verificação com hash.
-        if cliente and cliente.PalavraPasse == palavra_passe:
+        if cliente and bcrypt.checkpw(palavra_passe.encode('utf-8'), cliente.PalavraPasse.encode('utf-8')):
             logged_in_user = cliente
             user_type = 'cliente'
             session['utilizador_id'] = cliente.ClienteId
-        elif gestor and gestor.PalavraPasse == palavra_passe:
+        elif gestor and bcrypt.checkpw(palavra_passe.encode('utf-8'), gestor.PalavraPasse.encode('utf-8')):
             logged_in_user = gestor
             user_type = 'gestor'
             session['utilizador_id'] = gestor.GestorId
-        elif admin and admin.PalavraPasse == palavra_passe:
+        elif admin and bcrypt.checkpw(palavra_passe.encode('utf-8'), admin.PalavraPasse.encode('utf-8')):
             logged_in_user = admin
             user_type = 'admin'
             session['utilizador_id'] = admin.AdminId
@@ -206,8 +206,12 @@ def criar_gestor():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_gestor'))
         
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
-        novo_gestor = DimGestor(Username=username, Email=email, PalavraPasse=palavra_passe)
+        # Gerar novo ID manualmente (tabela sem IDENTITY)
+        last_gestor = DimGestor.query.order_by(DimGestor.GestorId.desc()).first()
+        novo_id = (last_gestor.GestorId + 1) if last_gestor else 1
+
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_gestor = DimGestor(GestorId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password)
         
         db.session.add(novo_gestor)
         db.session.commit()
@@ -239,13 +243,13 @@ def criar_cliente():
             flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_id = ClientRepository.getNextId()
         if ClientRepository.verificarClienteId(novo_id):
             flash('Erro: ID de cliente já existe.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
