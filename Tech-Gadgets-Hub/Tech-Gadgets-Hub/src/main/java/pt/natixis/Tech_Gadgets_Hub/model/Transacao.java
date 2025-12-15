@@ -40,4 +40,52 @@ public class Transacao {
         this.dataTransacao = dataTransacao;
         this.categoria = categoria;
     }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public String getDescricao() {
+        return descricao;
+    }
+
+    public Integer getQuantidade() {
+        return quantidade;
+    }
+
+    public LocalDate getDataTransacao() {
+        return dataTransacao;
+    }
+
+    public String getCategoria() {
+        return categoria;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public void setDescricao(String descricao) {
+        this.descricao = descricao;
+    }
+
+    public void setQuantidade(Integer quantidade) {
+        this.quantidade = quantidade;
+    }
+
+    public void setDataTransacao(LocalDate dataTransacao) {
+        this.dataTransacao = dataTransacao;
+    }
+
+    public void setCategoria(String categoria) {
+        this.categoria = categoria;
+    }
 }
