@@ -157,6 +157,11 @@ avaliar_limiar(test_proba, y_test, thr=0.5)
 print("\n")
 print(logit_model.summary())
 
+# Mostra os coeficientes isolados e ordenados para facilitar a análise
+print("\n--- Coeficientes (Pesos) do Modelo ---")
+print("Valores POSITIVOS aumentam o risco. Valores NEGATIVOS diminuem o risco.")
+print(logit_model.params.sort_values(ascending=False))
+
 # ==============================================================================
 # PARTE 4: Previsão em Novos Clientes
 # ==============================================================================

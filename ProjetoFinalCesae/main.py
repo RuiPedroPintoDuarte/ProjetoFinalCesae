@@ -1,10 +1,12 @@
 from flask import Flask, request, render_template, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+import bcrypt
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import text
 import joblib
 import pandas as pd
+import os
 import numpy as np
 import statsmodels.api as sm
 from Repository import ClientRepository
@@ -12,7 +14,8 @@ from Repository import ClientRepository
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@localhost/BankDatabase?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes'
 # Em produção, esta chave deve ser carregada de uma variável de ambiente e não estar hardcoded.
-app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
+# Gera uma chave aleatória a cada arranque para invalidar sessões anteriores
+app.config['SECRET_KEY'] = os.urandom(24)
 db = SQLAlchemy(app)
 
 # Modelos de Dimensão
@@ -28,7 +31,7 @@ class DimCliente(db.Model):
 
 class DimGestor(db.Model):
     __tablename__ = 'DimGestor'
-    GestorId = db.Column(db.Integer, primary_key=True)
+    GestorId = db.Column(db.Integer, primary_key=True, autoincrement=False)
     Username = db.Column(db.String(120), nullable=False, unique=True)
     Email = db.Column(db.String(120), nullable=False, unique=True)
     PalavraPasse = db.Column(db.String(120), nullable=False)
@@ -121,13 +124,13 @@ def registo():
             flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
             return redirect(url_for('registo'))
 
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_id = ClientRepository.getNextId()
         if ClientRepository.verificarClienteId(novo_id):
             flash('Erro: ID de cliente já existe. Tente novamente.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
@@ -151,16 +154,15 @@ def login():
         logged_in_user = None
         user_type = None
 
-        # TODO: A verificação da palavra-passe é feita em texto simples. Implementar verificação com hash.
-        if cliente and cliente.PalavraPasse == palavra_passe:
+        if cliente and bcrypt.checkpw(palavra_passe.encode('utf-8'), cliente.PalavraPasse.encode('utf-8')):
             logged_in_user = cliente
             user_type = 'cliente'
             session['utilizador_id'] = cliente.ClienteId
-        elif gestor and gestor.PalavraPasse == palavra_passe:
+        elif gestor and bcrypt.checkpw(palavra_passe.encode('utf-8'), gestor.PalavraPasse.encode('utf-8')):
             logged_in_user = gestor
             user_type = 'gestor'
             session['utilizador_id'] = gestor.GestorId
-        elif admin and admin.PalavraPasse == palavra_passe:
+        elif admin and bcrypt.checkpw(palavra_passe.encode('utf-8'), admin.PalavraPasse.encode('utf-8')):
             logged_in_user = admin
             user_type = 'admin'
             session['utilizador_id'] = admin.AdminId
@@ -204,8 +206,12 @@ def criar_gestor():
             flash('Utilizador já existe!', 'perigo')
             return redirect(url_for('criar_gestor'))
         
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
-        novo_gestor = DimGestor(Username=username, Email=email, PalavraPasse=palavra_passe)
+        # Gerar novo ID manualmente (tabela sem IDENTITY)
+        last_gestor = DimGestor.query.order_by(DimGestor.GestorId.desc()).first()
+        novo_id = (last_gestor.GestorId + 1) if last_gestor else 1
+
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_gestor = DimGestor(GestorId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password)
         
         db.session.add(novo_gestor)
         db.session.commit()
@@ -237,13 +243,13 @@ def criar_cliente():
             flash('Formato de data inválido. Use AAAA-MM-DD.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        # TODO: A palavra-passe está a ser guardada em texto simples. Implementar hashing.
         novo_id = ClientRepository.getNextId()
         if ClientRepository.verificarClienteId(novo_id):
             flash('Erro: ID de cliente já existe.', 'perigo')
             return redirect(url_for('criar_cliente'))
 
-        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=palavra_passe, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
+        hashed_password = bcrypt.hashpw(palavra_passe.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        novo_cliente = DimCliente(ClienteId=novo_id, Username=username, Email=email, PalavraPasse=hashed_password, Nome=nome, DataNascimento=data_nascimento, NIF=nif)
         
         db.session.add(novo_cliente)
         db.session.commit()
@@ -280,14 +286,8 @@ def meus_movimentos():
     info_bancaria = FactInfoBancaria.query.filter_by(ClienteId=user_id).first()
     saldo = info_bancaria.Saldo if info_bancaria else 0.0
 
-    # Usar SQL puro para contornar o problema do modelo FactTransacao não ter uma PK correspondente na BD
-    sql_query = text("""
-        SELECT TOP 10 Descricao, Quantidade, DataTransacao
-        FROM FactTransacao
-        WHERE ClienteId = :user_id
-        ORDER BY DataTransacao DESC
-    """)
-    transacoes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+    # Consulta atualizada para usar o ORM (mais limpo e seguro)
+    transacoes = FactTransacao.query.filter_by(ClienteId=user_id).order_by(FactTransacao.DataTransacao.desc()).limit(10).all()
     
     return render_template('cliente_movimentos.html', cliente=cliente, saldo=saldo, transacoes=transacoes)
 
@@ -297,11 +297,29 @@ def meus_movimentos():
 def minha_atividade():
     user_id = session['utilizador_id']
     
+    # Filtros da Query String
+    ano_filtro = request.args.get('ano')
+    mes_filtro = request.args.get('mes')
+
+    # Obter anos disponíveis para o dropdown
+    sql_anos = text("SELECT DISTINCT YEAR(DataTransacao) as ano FROM FactTransacao WHERE ClienteId = :user_id ORDER BY ano DESC")
+    anos_result = db.session.execute(sql_anos, {'user_id': user_id}).fetchall()
+    anos_disponiveis = [row.ano for row in anos_result]
+
+    # Construção dinâmica dos filtros SQL
+    params = {'user_id': user_id}
+    filtro_sql = ""
+    
+    if ano_filtro and ano_filtro.isdigit():
+        filtro_sql += " AND YEAR(DataTransacao) = :ano"
+        params['ano'] = int(ano_filtro)
+        
+    if mes_filtro and mes_filtro.isdigit():
+        filtro_sql += " AND MONTH(DataTransacao) = :mes"
+        params['mes'] = int(mes_filtro)
+    
     # Agregação para o gráfico de barras (Total Gasto/Mês)
-    # Exemplo: Soma quantidades negativas (gastos) agrupadas por mês
-    # NOTA: Agrupar também por ano para não misturar dados de anos diferentes.
-    # Usar SQL puro para contornar o problema do modelo FactTransacao
-    sql_query = text("""
+    sql_query = text(f"""
         SELECT
             YEAR(DataTransacao) as ano,
             MONTH(DataTransacao) as mes,
@@ -315,20 +333,40 @@ def minha_atividade():
                     ELSE 0 
                 END as QtdAjustada
             FROM FactTransacao
-            WHERE ClienteId = :user_id
+            WHERE ClienteId = :user_id {filtro_sql}
         ) AS Valores
         WHERE QtdAjustada < 0
         GROUP BY YEAR(DataTransacao), MONTH(DataTransacao)
         ORDER BY ano, mes
     """)
-    gastos_por_mes = db.session.execute(sql_query, {'user_id': user_id}).fetchall()
+    gastos_por_mes = db.session.execute(sql_query, params).fetchall()
 
 
     # Passar estes dados para o Chart.js no frontend
     labels = [f"{d.ano}-{d.mes:02d}" for d in gastos_por_mes]
     values = [abs(d.total) for d in gastos_por_mes] # Valor absoluto para o gráfico
 
-    return render_template('cliente_atividade.html', labels=labels, values=values)
+    # Agregação para o gráfico circular (Total Gasto/Categoria)
+    sql_query_cat = text(f"""
+        SELECT 
+            ISNULL(Categoria, 'Outros') as Categoria,
+            SUM(ABS(Quantidade)) as Total
+        FROM FactTransacao
+        WHERE ClienteId = :user_id AND Quantidade < 0 {filtro_sql}
+        GROUP BY Categoria
+        ORDER BY Total DESC
+    """)
+    gastos_cat = db.session.execute(sql_query_cat, params).fetchall()
+    
+    labels_cat = [row.Categoria for row in gastos_cat]
+    values_cat = [float(row.Total) for row in gastos_cat]
+
+    return render_template('cliente_atividade.html', 
+                           labels=labels, values=values, 
+                           labels_cat=labels_cat, values_cat=values_cat,
+                           anos_disponiveis=anos_disponiveis,
+                           ano_selecionado=int(ano_filtro) if ano_filtro and ano_filtro.isdigit() else None,
+                           mes_selecionado=int(mes_filtro) if mes_filtro and mes_filtro.isdigit() else None)
 
 
 @app.route('/meu-perfil')
@@ -384,7 +422,8 @@ def detalhe_cliente(id):
         except ValueError:
             valor_simulado = 0
         
-        probabilidade = prever_default(id, simulacao_valor=valor_simulado)
+        tipo_emprestimo = request.form.get('tipo_emprestimo', 'pessoal')
+        probabilidade = prever_default(id, simulacao_valor=valor_simulado, tipo_emprestimo=tipo_emprestimo)
     else:
         # Apenas visualizar (risco base sem empréstimo novo)
         probabilidade = prever_default(id, simulacao_valor=0)
@@ -395,7 +434,17 @@ def detalhe_cliente(id):
     # Dados para o gráfico circular (Pie Chart)
     chart_data = {'Score': 100 - risco_percent, 'Risco': risco_percent}
 
-    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_simulado)
+    # Formatar o valor para exibição no input HTML
+    # O parser espera formato PT (1.000,00), mas o Python gera formato US (1000.00).
+    # Se enviarmos 1000.0, o parser remove o ponto (milhar) e vira 10000.
+    valor_exibicao = valor_simulado
+    if isinstance(valor_simulado, float):
+        if valor_simulado.is_integer():
+            valor_exibicao = int(valor_simulado)
+        else:
+            valor_exibicao = f"{valor_simulado:.2f}".replace('.', ',')
+
+    return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_exibicao)
 
 @app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
@@ -462,7 +511,7 @@ def eliminar_gestor(id):
     flash('Gestor eliminado.', 'sucesso')
     return redirect(url_for('lista_gestores'))
 
-def prever_default(cliente_id, simulacao_valor=0):
+def prever_default(cliente_id, simulacao_valor=0, tipo_emprestimo='pessoal'):
     """
     Usa o modelo de ML para prever a probabilidade de default de um cliente.
     """
@@ -485,14 +534,33 @@ def prever_default(cliente_id, simulacao_valor=0):
     # 1. Preparar os dados para a previsão
     age = (datetime.now().date() - cliente.DataNascimento).days // 365
     
+    # Ajustar dados com base na simulação
+    # Para usar apenas o modelo, refletimos o empréstimo como uma redução do "património líquido" (Saldo)
+    # e ativamos a flag do tipo de empréstimo correspondente.
+    saldo_final = info.Saldo
+    tem_casa = 'yes' if info.EmprestimoCasa else 'no'
+    tem_pessoal = 'yes' if info.EmprestimoPessoal else 'no'
+
+    if simulacao_valor > 0:
+        if 'habita' in str(tipo_emprestimo).lower() or 'casa' in str(tipo_emprestimo).lower():
+            tem_casa = 'yes'
+            # Empréstimo Habitação: O impacto no "saldo/liquidez" é menor pois existe um ativo (casa).
+            # Consideramos apenas 20% do valor como impacto imediato no perfil de risco financeiro.
+            saldo_final = info.Saldo - (simulacao_valor * 0.20)
+        else:
+            tem_pessoal = 'yes'
+            # Empréstimo Pessoal: Considerado dívida de consumo ou sem garantia forte.
+            # O impacto é total no saldo ajustado para o modelo.
+            saldo_final = info.Saldo - simulacao_valor
+
     dados_cliente = pd.DataFrame({
         'age': [age],
         'job': [info.Emprego],
         'marital': [info.EstadoCivil],
         'education': [info.Educacao],
-        'balance': [info.Saldo],
-        'housing': ['yes' if info.EmprestimoCasa else 'no'],
-        'loan': ['yes' if info.EmprestimoPessoal else 'no']
+        'balance': [saldo_final],
+        'housing': [tem_casa],
+        'loan': [tem_pessoal]
     })
 
     # 2. One-hot encode dos dados
@@ -507,23 +575,6 @@ def prever_default(cliente_id, simulacao_valor=0):
     # 5. Fazer a previsão
     probabilidade = model.predict(dados_cliente_const)
     probabilidade_final = float(probabilidade.iloc[0])
-    
-    # 6. Regra de Negócio: Penalização por valor do empréstimo vs Saldo
-    # O modelo de ML original não conhece o valor do pedido, por isso aplicamos uma penalização manual.
-    if simulacao_valor > 0:
-        # Usamos max(1, saldo) para evitar divisão por zero ou números negativos
-        saldo_ref = max(info.Saldo, 1.0)
-        racio = simulacao_valor / saldo_ref
-        
-        penalizacao = 0.0
-        if racio > 50:      # Pedir 50x mais do que tem
-            penalizacao = 0.90
-        elif racio > 20:    # Pedir 20x mais
-            penalizacao = 0.50
-        elif racio > 5:     # Pedir 5x mais
-            penalizacao = 0.20
-            
-        probabilidade_final = min(probabilidade_final + penalizacao, 1.0)
     
     return round(probabilidade_final, 4)
 

@@ -62,18 +62,17 @@ CREATE TABLE FactTransacao(
     (ClienteId) REFERENCES dbo.DimCliente(ClienteId)
 )
 
-INSERT INTO DimAdmin (AdminId, Username, Email, PalavraPasse)
-VALUES (1, 'admin_geral', 'admin@bankdatabase.com', 'adminPass123');
+INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
+VALUES (1, 'McDonalds', -20, '2025-12-15', 'Restauração');
 
-INSERT INTO DimGestor (GestorId, Username, Email, PalavraPasse)
-VALUES (101, 'joao_gestor', 'joao.gestor@bankdatabase.com', 'gestorPass123');
+INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
+VALUES (1, 'KFC', -25, '2025-12-16', 'Restauração');
 
-INSERT INTO FactGestorCliente (GestorId, ClienteId)
-VALUES
-(101, 1), 
-(101, 2), 
-(101, 3); 
+INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
+VALUES (1, 'Farmácia da Boavista', -25, '2025-12-17', 'Farmácia');
 
+INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
+VALUES (1, 'Farmácia de Recarei', -25, '2024-12-1', 'Farmácia');
 
 SELECT * FROM dbo.DimCliente
 SELECT * FROM dbo.DimGestor
