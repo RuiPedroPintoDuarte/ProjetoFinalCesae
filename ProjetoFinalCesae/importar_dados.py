@@ -89,8 +89,6 @@ def createStaticUsers():
     fact_df.to_sql("FactGestorCliente", engine, if_exists="append", index=False)
 
 
-
-
 def getDataNascimento(idade):
     dia = str(random.randint(1, 12))
     mes = str(random.randint(1, 12))
