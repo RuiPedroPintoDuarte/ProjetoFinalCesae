@@ -197,7 +197,11 @@ previsoes = pd.DataFrame({
     'Cliente': [f"Cliente {i+1}" for i in range(len(novos_clientes))],
     'Idade': novos_clientes['age'],
     'Job': novos_clientes['job'],
+    'Marital': novos_clientes['marital'],
+    'Education': novos_clientes['education'],
     'Balance': novos_clientes['balance'],
+    'Housing': novos_clientes['housing'],
+    'Loan': novos_clientes['loan'],
     'P_default': round(novos_proba, 3),
     'Risco': novos_risco
 })
