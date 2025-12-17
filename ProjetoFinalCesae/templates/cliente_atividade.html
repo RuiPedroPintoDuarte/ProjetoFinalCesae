@@ -76,8 +76,8 @@
             datasets: [{
                 label: 'Total Gasto (€)',
                 data: {{ values|tojson }},
-                backgroundColor: 'rgba(13, 110, 253, 0.7)',
-                borderColor: 'rgba(13, 110, 253, 1)',
+                backgroundColor: 'rgba(187, 55, 140, 0.7)', /* Rosa Magenta (#BB378C) com transparência */
+                borderColor: '#BB378C',
                 borderWidth: 1
             }]
         },
@@ -94,8 +94,7 @@
             datasets: [{
                 data: {{ values_cat|tojson }},
                 backgroundColor: [
-                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', 
-                    '#858796', '#5a5c69', '#00aba9', '#2b5797', '#e83b8c'
+                    '#381941', '#BB378C', '#6F3680', '#E65D8C', '#A68FAA', '#E4DAE3'
                 ],
                 borderWidth: 0,
                 hoverOffset: 4

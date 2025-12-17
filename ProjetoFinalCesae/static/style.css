@@ -1,10 +1,10 @@
 /* Variáveis de Cores Corporativas */
 :root {
-    --primary-color: #0f2a4a; /* Azul Marinho Profundo */
-    --secondary-color: #00b4d8; /* Azul Ciano para destaques */
-    --accent-color: #fca311; /* Laranja suave para avisos/ações */
-    --bg-color: #f4f6f9; /* Cinza muito claro para fundo */
-    --text-color: #333333;
+    --primary-color: #381941; /* Roxo escuro (texto/logo) */
+    --secondary-color: #BB378C; /* Rosa magenta */
+    --accent-color: #E65D8C; /* Rosa vibrante */
+    --bg-color: #E4DAE3; /* Lavanda muito claro */
+    --text-color: #381941; /* Roxo escuro */
     --card-bg: #ffffff;
 }
 
@@ -20,6 +20,16 @@ body {
     color: var(--text-color);
     min-height: 100vh;
     display: block; /* Remove flex center para permitir layout normal */
+}
+
+/* Links e Overrides de Cores */
+a {
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--primary-color);
 }
 
 /* Navbar Personalizada */
@@ -89,8 +99,8 @@ h3 {
 }
 
 .btn-primary:hover {
-    background-color: #1a3c61;
-    border-color: #1a3c61;
+    background-color: #6F3680; /* Roxo médio */
+    border-color: #6F3680;
 }
 
 .btn-outline-secondary {
@@ -112,7 +122,20 @@ h3 {
 
 .form-control:focus {
     border-color: var(--secondary-color);
-    box-shadow: 0 0 0 0.25rem rgba(0, 180, 216, 0.15);
+    box-shadow: 0 0 0 0.25rem rgba(187, 55, 140, 0.25);
+}
+
+/* Overrides do Bootstrap para remover o azul padrão */
+.text-primary {
+    color: var(--secondary-color) !important; /* Muda o azul para Rosa Magenta */
+}
+
+.bg-primary {
+    background-color: var(--primary-color) !important; /* Muda fundos azuis para Roxo */
+}
+
+.text-info {
+    color: var(--accent-color) !important; /* Muda o ciano para Rosa Vibrante */
 }
 
 /* Login Específico */

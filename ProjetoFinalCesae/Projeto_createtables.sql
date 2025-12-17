@@ -74,6 +74,9 @@ VALUES (1, 'Farmácia da Boavista', -25, '2025-12-17', 'Farmácia');
 INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
 VALUES (1, 'Farmácia de Recarei', -25, '2024-12-1', 'Farmácia');
 
+INSERT INTO FactTransacao( ClienteId, Descricao, Quantidade, DataTransacao, Categoria)
+VALUES (1, 'Worten', -500, '2025-12-17', 'Tecnologia');
+
 SELECT * FROM dbo.DimCliente
 SELECT * FROM dbo.DimGestor
 SELECT * FROM dbo.DimAdmin

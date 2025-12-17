@@ -64,9 +64,9 @@
     </div>
     <div class="col-md-5">
         <div class="card">
-            <div class="card-header">Simulador de Risco (IA)</div>
+            <div class="card-header">Simulador de Risco</div>
             <div class="card-body">
-                <form method="POST" class="mb-4">
+                <form method="POST" class="mb-4" id="simulacaoForm">
                     <div class="mb-3">
                         <label for="valor" class="form-label">Simular Valor de Empréstimo (€)</label>
                         <input type="number" class="form-control" id="valor" name="valor" step="0.01" value="{{ valor_simulado if valor_simulado else '' }}" placeholder="Ex: 5000">
@@ -83,14 +83,16 @@
                 
                 <hr>
                 
-                <canvas id="riskChart"></canvas>
-                <div class="mt-3 text-center text-muted small">
-                    Probabilidade de Default: <strong>{{ chart_data.Risco }}%</strong>
-                    {% if valor_simulado > 0 %}
-                    <br><span class="text-info">Simulação para empréstimo de €{{ valor_simulado }}</span>
-                    {% else %}
-                    <br>Risco base (sem novo empréstimo)
-                    {% endif %}
+                <div class="mt-4 text-center">
+                    <h5 class="text-muted mb-2">Probabilidade de Default</h5>
+                    <h1 class="display-3 fw-bold text-primary" id="riskValue">{{ chart_data.Risco }}%</h1>
+                    <div id="simulationInfo" class="mt-3 text-muted">
+                        {% if valor_simulado > 0 %}
+                        <span class="text-info">Simulação para empréstimo de €{{ valor_simulado }}</span>
+                        {% else %}
+                        Risco base (sem novo empréstimo)
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -100,20 +102,38 @@
 
 {% block scripts %}
 <script>
-    const ctx = document.getElementById('riskChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['Pontuação de Crédito', 'Risco'],
-            datasets: [{
-                data: [{{ chart_data.Score }}, {{ chart_data.Risco }}],
-                backgroundColor: [
-                    'rgba(25, 135, 84, 0.7)', // Verde para score
-                    'rgba(220, 53, 69, 0.7)'  // Vermelho para risco
-                ],
-                hoverOffset: 4
-            }]
-        }
+    // Lógica para atualizar via AJAX (JSON) sem recarregar a página
+    document.getElementById('simulacaoForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const valor = document.getElementById('valor').value;
+        const tipo = document.getElementById('tipo').value;
+        const btn = this.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+
+        btn.disabled = true;
+        btn.innerText = 'A calcular...';
+
+        fetch('/api/simular-risco/{{ cliente.ClienteId }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({valor: valor, tipo_emprestimo: tipo})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.sucesso) {
+                // Atualizar Texto
+                document.getElementById('riskValue').innerText = data.risco_percentual + '%';
+                const infoSpan = document.getElementById('simulationInfo');
+                
+                if (valor > 0) infoSpan.innerHTML = `<span class="text-info">Simulação para empréstimo de €${valor}</span>`;
+                else infoSpan.innerText = 'Risco base (sem novo empréstimo)';
+            } else {
+                alert('Erro: ' + data.erro);
+            }
+        })
+        .catch(err => console.error(err))
+        .finally(() => { btn.disabled = false; btn.innerText = originalText; });
     });
 </script>
 {% endblock %}
