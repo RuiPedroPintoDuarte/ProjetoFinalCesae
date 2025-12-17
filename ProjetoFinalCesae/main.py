@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import bcrypt
 from datetime import datetime
@@ -445,6 +445,26 @@ def detalhe_cliente(id):
             valor_exibicao = f"{valor_simulado:.2f}".replace('.', ',')
 
     return render_template('detalhe_cliente.html', cliente=cliente, info=info, chart_data=chart_data, valor_simulado=valor_exibicao)
+
+@app.route('/api/simular-risco/<int:id>', methods=['POST'])
+@papel_obrigatorio(['gestor', 'admin'])
+def api_simular_risco(id):
+    # Esta rota recebe JSON e devolve JSON (ideal para chamadas AJAX/Fetch)
+    data = request.get_json()
+    
+    try:
+        valor_simulado = float(data.get('valor', 0))
+        tipo_emprestimo = data.get('tipo_emprestimo', 'pessoal')
+        
+        probabilidade = prever_default(id, simulacao_valor=valor_simulado, tipo_emprestimo=tipo_emprestimo)
+        
+        return jsonify({
+            'sucesso': True,
+            'probabilidade': probabilidade,
+            'risco_percentual': round(probabilidade * 100, 1) if probabilidade is not None else 0
+        })
+    except Exception as e:
+        return jsonify({'sucesso': False, 'erro': str(e)}), 400
 
 @app.route('/editar-cliente/<int:id>', methods=['GET', 'POST'])
 @papel_obrigatorio(['gestor', 'admin'])
